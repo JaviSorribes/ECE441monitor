@@ -1,0 +1,109 @@
+00001200 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.15.04
+Created On: 4/4/2017 01:25:31
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : Monitor Design Project
+00000000                             3  * Written by : Javier Sorribes
+00000000                             4  * Date       : 4/2/17
+00000000                             5  * Description: Some crazy, crazy stuff
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      ORG     $1000       ; stack and other memory
+00001000= 4D 4F 4E 49 54 4F ...      8  PROMPT_STR  DC.B    'MONITOR441>',0 ; might want to add one space
+0000100C= 49 4E 56 41 4C 49 ...      9  INVALID     DC.B    'INVALID COMMAND',0
+0000101C                            10  
+0000101C= 34 48 45 4C 50 00         11  COM_TABL    DC.B    '4HELP',0   ; Command names table
+00001022= 34 4D 44 53 50 00         12              DC.B    '4MDSP',0  ; number specifies length of word 
+00001028= 34 4D 54 53 54 00         13              DC.B    '4MTST',0       ; used for SEARCH (not input)
+0000102E= 34 45 58 49 54 00         14              DC.B    '4EXIT',0
+00001034                            15              
+00001034= 1266                      16  COM_ADDR    DC.W    HELP        ; Command addresses table
+00001036= 1268                      17              DC.W    MDSP
+00001038= 126A                      18              DC.W    MTST
+0000103A= 126C                      19              DC.W    EXIT
+0000103C                            20  
+00001200                            21      ORG     $1200
+00001200                            22  START:                  ; first instruction of program
+00001200                            23  
+00001200  =00000050                 24  MAX_IN_LEN  EQU 80  ; to ensure input won't overflow stack
+00001200  =00003000                 25  STACK       EQU $3000
+00001200  4FF8 3000                 26          LEA     STACK,A7
+00001204                            27  
+00001204                            28          **Populate exception vector table
+00001204                            29          
+00001204                            30  *** MAIN: Prompt, execute and repeat ***
+00001204  43F8 1000                 31  PROMPT  LEA     PROMPT_STR,A1  
+00001208  103C 000E                 32          MOVE.B  #14,D0
+0000120C  4E4F                      33          TRAP    #15     ; print out prompt
+0000120E  9FFC 00000050             34          SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input -- COULD GO BEFORE PROMPT (REF #1)
+00001214  224F                      35          MOVEA.L A7,A1   ; input will go in stack
+00001216  103C 0002                 36          MOVE.B  #2,D0
+0000121A  4E4F                      37          TRAP    #15     ; read user input, length stored in D1
+0000121C                            38          
+0000121C  49F8 101C                 39          LEA     COM_TABL,A4 ; beginning of command table
+00001220  4BF8 1034                 40          LEA     COM_ADDR,A5 ; end of command table
+00001224  4283                      41          CLR.L   D3      ; will be the count of where the command is
+00001226  4282                      42  SEARCH  CLR.L   D2
+00001228  141C                      43          MOVE.B  (A4)+,D2   ; length of next command string
+0000122A  0402 0030                 44          SUBI.B  #$30,D2 ; convert ascii num to hex
+0000122E  2C49                      45          MOVEA.L A1,A6   ; pointer to input string
+00001230  BD0C                      46  CMP_B   CMPM.B  (A4)+,(A6)+ ; compare byte to byte with command names
+00001232  56CA FFFC                 47          DBNE    D2,CMP_B    ; keep comparing characters until length is over
+00001236  4A42                      48          TST.W   D2
+00001238  6D00 0018                 49          BLT     EXEC    ; loop was exhausted and all chars were equal
+0000123C  D9C2                      50          ADDA.L  D2,A4   ; go to end of command
+0000123E  5483                      51          ADDQ.L  #2,D3   ; else, increment offset by word size
+00001240  BBCC                      52          CMPA.L  A4,A5 ; end of COM_TABL
+00001242  6CE2                      53          BGE     SEARCH  ; keep on searching
+00001244                            54          
+00001244  43F8 100C                 55          LEA     INVALID,A1  ; command was invalid
+00001248  103C 000D                 56          MOVE.B  #13,D0
+0000124C  4E4F                      57          TRAP    #15     ; output invalid command
+0000124E  6000 000E                 58          BRA     ENDLOOP ; prompt again
+00001252                            59          
+00001252  DBC3                      60  EXEC    ADDA.L  D3,A5   ; add offset to COM_ADDR start
+00001254  2C7C 00000000             61          MOVEA.L #0,A6   ; clear A6
+0000125A  3C55                      62          MOVEA.W (A5),A6 ; move that command's address register
+0000125C  4E96                      63          JSR     (A6)    ; jump to that command's subroutine (below)
+0000125E                            64  
+0000125E  DFFC 00000050             65  ENDLOOP ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input -- COULD GO IN EXIT SUBROUTINE (REF #1)
+00001264  609E                      66          BRA     PROMPT  ; prompt again
+00001266                            67  
+00001266                            68  *** DEBUGGING COMMANDS ***
+00001266                            69  HELP    
+00001266  4E75                      70          RTS
+00001268                            71          
+00001268                            72  MDSP    
+00001268  4E75                      73          RTS
+0000126A                            74  
+0000126A                            75  MTST    
+0000126A  4E75                      76          RTS
+0000126C                            77  
+0000126C  103C 0009                 78  EXIT    MOVE.B  #9, D0
+00001270  4E4F                      79          TRAP    #15     ; exit program
+00001272                            80  
+00001272                            81      END     START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CMP_B               1230
+COM_ADDR            1034
+COM_TABL            101C
+ENDLOOP             125E
+EXEC                1252
+EXIT                126C
+HELP                1266
+INVALID             100C
+MAX_IN_LEN          50
+MDSP                1268
+MTST                126A
+PROMPT              1204
+PROMPT_STR          1000
+SEARCH              1226
+STACK               3000
+START               1200
