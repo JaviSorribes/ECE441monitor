@@ -99,8 +99,7 @@ MDSP    MOVEM.L D0-D3/A1-A3,-(A7)
         CMPI.B  #$24,D1
         BNE     MDSPINV ; wrong command usage
         BSR     MEM2HEX ; D1 has 1st address in hex
-        MOVEA.L #0,A2   ; CLR.L A2 (not allowed)
-        MOVEA.W D1,A2
+        MOVEA.L D1,A2
         MOVE.B  (A6)+,D1    ; space in between addresses
         TST.B   D1  ; if null, no 2nd address, so address2 = address1 + 16
         BNE     MDSPADDR2
@@ -122,7 +121,6 @@ MDSPLOOP    MOVEA.L A7,A1
         MOVE.B  #$24,-(A1)  ; '$' for nicer output
         MOVE.B  #14,D0
         TRAP    #15     ; print current memory address
-        ;MOVEA.L A7,A1   ; write on top to leverage memory usage
         MOVE.B  #$00,-(A1) ; null terminator
         MOVE.B  #$20,-(A1)  ; space
         MOVE.L  (A2)+,D1
@@ -151,18 +149,21 @@ INVALID MOVEM.L D0/A1,-(A7)
         MOVEM.L (A7)+,D0/A1
         RTS
 
-* Takes 4 digits from (A6) in ascii and puts them in D1 as hex: -- COULD MAKE IT TAKE X DIGITS (REF #2)
+* Takes X digits from (A6) in ascii and puts them in D1 as hex:
 MEM2HEX MOVEM.L D0/D7,-(A7)    ; store in stack
-        MOVE.L  #4,D0   ; number of digits
         CLR.L   D1
-M2HNEXT MOVE.B (A6)+,D7    ; read in next byte
-        BSR     BYTE2HEX    ; byte to hex digit, in D7
+        MOVE.B (A6)+,D7    ; read in next byte (prime read)
+        CMPI.B  #$30,D7
+        BLT     MEM2HEXDONE ; reached some whitespace or non-numeric ascii
+M2HNEXT BSR     BYTE2HEX    ; byte to hex digit, in D7
         ADD.B   D7,D1
-        SUBQ.L  #1,D0   ; decrement counter
-        BEQ     MEM2HEXDONE ; done
+        MOVE.B (A6)+,D7    ; read in next byte (prime read)
+        CMPI.B  #$30,D7
+        BLT     MEM2HEXDONE ; reached some whitespace or non-numeric ascii
         ASL.L   #4,D1   ; skip this the last time
         BRA     M2HNEXT ; loop again because not done
-MEM2HEXDONE  MOVEM.L (A7)+,D0/D7    ; restore from stack
+MEM2HEXDONE  SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
+        MOVEM.L (A7)+,D0/D7    ; restore from stack
         RTS
 
 * Takes byte in ascii in D7 and converts it to hex in D7:
@@ -177,10 +178,6 @@ B2HSKIPPY   SUB.B   #$30,D7
 HEX2MEM MOVEM.L D0/D2/D7,-(A7)    ; store in stack
         CLR.L   D0   ; counter
 H2MNEXT MOVE.L  D1,D7
-        ;MOVE.L  D0,D2
-;H2MLEFT LSL.L   #4,D7    ; move by corresponding amount so at top
- ;       SUBQ.W  #1,D2
-  ;      BGT     H2MLEFT
         MOVE.L D0,D2
 H2MRIGHT    SUBQ.W  #1,D2
         BLT     H2MDONE
@@ -204,11 +201,6 @@ H2BSKIPPY   ADD.B   #$30,D7
         RTS
 
     END     START        ; last line of source
-
-
-
-
-
 
 
 
