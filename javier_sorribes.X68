@@ -24,18 +24,19 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MM
             DC.W    EXIT
             
-HELP_MSG    DC.B    'HELP: Displays this message',$A,$A,$D
+HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'MDSP: Outputs Address And Memory Contents',$A,$D
             DC.B    'Default address2: address1 + 16',$A,$D
             DC.B    'MDSP <address1>[ <address2>] eg: MDSP $908 $904<CR>',$A,$A,$D
-            DC.B    'SORTW: Sorts unsigned words in a block of memory',$A,$D
+            DC.B    'SORTW: Sorts Unsigned Words In A Memory Block',$A,$D
             DC.B    'Both address1 and address2 are inclusive',$A,$D
-            DC.B    'SORTW <address1> <address2> A|D eg: SORTW $2000 $201E A<CR>',$A,$A,$D
+            DC.B    'Default order: descending',$A,$D
+            DC.B    'SORTW <address1> <address2>[ A|D] eg: SORTW $2000 $201E A<CR>',$A,$A,$D
             DC.B    'MM: Modifies Data In Memory',$A,$D
             DC.B    'Default: Displays one byte',$A,$D
-            DC.B    ';W: Displays One Word',$A,$D
-            DC.B    ';L: Displays One Long Word',$A,$D
-            DC.B    'MM <address>[;size]',$A,$A,$D
+            DC.B    'W: Displays one word',$A,$D
+            DC.B    'L: Displays one long word',$A,$D
+            DC.B    'MM <address>[ size]',$A,$A,$D
             ** Add all others as I go
             DC.B    'EXIT: Exit the monitor program eg: EXIT<CR>',0
             
@@ -90,7 +91,7 @@ ENDLOOP ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading i
         BRA     PROMPT  ; prompt again
 
 *** DEBUGGING COMMANDS ***
-; HELP -- displays help message
+* HELP -- displays help message
 HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
         LEA     HELP_MSG,A1  
         MOVE.B  #13,D0
@@ -158,14 +159,16 @@ SORTW   MOVEM.L D0-D4/A1-A4,-(A7)
         BSR     MEM2HEX     ; D1 has now the 2nd address
         MOVEA.L D1,A3       ; store in A3
         MOVE.B  (A6)+,D1    ; space 
-        CMPI.B  #$20,D1     ; is it ' '?
+        CMPI.B  #$00,D1     ; is it NULL?
+        BEQ     SORTWDEF    ; use default: descending (D1=0)
+        CMPI.B  #$20,D1     ; or is it ' '?
         BNE     SORTWINV    ; wrong command usage
         MOVE.B  (A6)+,D1    ; char either 'A' or 'D'
         CMPI.B  #$41,D1     ; is it 'A'?
         BEQ     SORTWLOOP   ; if so, D1 marks ascending
         CMPI.B  #$44,D1     ; else, is it 'D'?
         BNE     SORTWINV    ; if it isn't, input was invalid
-        CLR.L   D1          ; if it is, D1=0 marks descending
+SORTWDEF    CLR.L   D1          ; if it is, D1=0 marks descending
 SORTWLOOP   MOVEA.L A2,A4   ; first address copied into A4
 SORTWCMP    TST.B   D1      ; tells us whether ascending or descending
         BEQ     SORTWD  ; do descending
