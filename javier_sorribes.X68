@@ -40,7 +40,7 @@ HELP_MSG    DC.B    'HELP: Displays this message',$A,$A,$D
             DC.B    'EXIT: Exit the monitor program eg: EXIT<CR>',0
             
 *** RUNNING PROGRAM ***
-    ORG     $1200
+    ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
 START:                  ; first instruction of program
 
 MAX_IN_LEN  EQU 80  ; to ensure input won't overflow stack
