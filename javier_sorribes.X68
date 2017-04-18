@@ -90,6 +90,7 @@ ENDLOOP ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading i
         BRA     PROMPT  ; prompt again
 
 *** DEBUGGING COMMANDS ***
+; HELP -- displays help message
 HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
         LEA     HELP_MSG,A1  
         MOVE.B  #13,D0
@@ -99,6 +100,8 @@ HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
         
 * For this subroutine and others, A6 contains the start of the command's parameters
 * eg: MDSP $1230 $1890 <- A6 points to the first '$'
+
+* MDSP -- displays memory block
 MDSP    MOVEM.L D0-D3/A1-A3,-(A7)
         MOVE.B  (A6)+,D1    ; first '$'
         CMPI.B  #$24,D1 ; is it '$'?
@@ -139,7 +142,7 @@ MDSPINV BSR     INVALID ; print invalid command message
 MDSPDONE    MOVEM.L (A7)+,D0-D3/A1-A3
         RTS
 
-; SORTW, implements bubble sort -- unsigned numbers
+* SORTW -- implements bubble sort (unsigned numbers)
 SORTW   MOVEM.L D0-D4/A1-A4,-(A7)
         MOVE.B  (A6)+,D1    ; first '$'
         CMPI.B  #$24,D1     ; is it '$'?
@@ -183,9 +186,11 @@ SORTWINV    BSR INVALID
 SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
         RTS
 
+* MM -- 
 MM    
         RTS
 
+* EXIT -- terminates the program
 EXIT    MOVE.B  #9, D0
         TRAP    #15     ; exit program
 
