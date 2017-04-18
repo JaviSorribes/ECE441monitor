@@ -1,0 +1,3 @@
+A6 points at end of command input after running command (not restored with stack)
+
+Not using ';' convention, but just whitespace
