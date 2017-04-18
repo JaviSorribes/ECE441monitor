@@ -14,11 +14,13 @@ INVALID_MSG DC.B    'INVALID COMMAND',$A,$D
 
 COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '4MDSP',$20  ; number specifies length of word 
-            DC.B    '2MM',0       ; used for SEARCH (not input)
+            DC.B    '5SORTW',$20    ; used for SEARCH (not input)
+            DC.B    '2MM',0
             DC.B    '4EXIT',0
             
 COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MDSP
+            DC.W    SORTW
             DC.W    MM
             DC.W    EXIT
             
@@ -26,6 +28,9 @@ HELP_MSG    DC.B    'HELP: Displays this message',$A,$A,$D
             DC.B    'MDSP: Outputs Address And Memory Contents',$A,$D
             DC.B    'Default address2: address1 + 16',$A,$D
             DC.B    'MDSP <address1>[ <address2>] eg: MDSP $908 $904<CR>',$A,$A,$D
+            DC.B    'SORTW: Sorts unsigned words in a block of memory',$A,$D
+            DC.B    'Both address1 and address2 are inclusive',$A,$D
+            DC.B    'SORTW <address1> <address2> A|D eg: SORTW $2000 $201E A<CR>',$A,$A,$D
             DC.B    'MM: Modifies Data In Memory',$A,$D
             DC.B    'Default: Displays one byte',$A,$D
             DC.B    ';W: Displays One Word',$A,$D
@@ -48,11 +53,11 @@ STACK       EQU $3000
 *** MAIN: Prompt, execute and repeat ***
         LEA     WELCOME,A1
         MOVE.B  #13,D0
-        TRAP    #15
+        TRAP    #15     ; display welcome message
 PROMPT  LEA     PROMPT_STR,A1  
         MOVE.B  #14,D0
         TRAP    #15     ; print out prompt
-        SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input -- COULD GO BEFORE PROMPT (REF #1)
+        SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input
         MOVEA.L A7,A1   ; input will go in stack
         MOVE.B  #2,D0
         TRAP    #15     ; read user input, length stored in D1
@@ -81,7 +86,7 @@ EXEC    ADDA.L  D3,A5   ; add offset to COM_ADDR start
         MOVEA.W (A5),A3 ; move that command's address to register
         JSR     (A3)    ; jump to that command's subroutine (below)
 
-ENDLOOP ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input -- COULD GO IN EXIT SUBROUTINE (REF #1)
+ENDLOOP ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
         BRA     PROMPT  ; prompt again
 
 *** DEBUGGING COMMANDS ***
@@ -96,10 +101,10 @@ HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
 * eg: MDSP $1230 $1890 <- A6 points to the first '$'
 MDSP    MOVEM.L D0-D3/A1-A3,-(A7)
         MOVE.B  (A6)+,D1    ; first '$'
-        CMPI.B  #$24,D1
+        CMPI.B  #$24,D1 ; is it '$'?
         BNE     MDSPINV ; wrong command usage
         BSR     MEM2HEX ; D1 has 1st address in hex
-        MOVEA.L D1,A2
+        MOVEA.L D1,A2   ;store in A2
         MOVE.B  (A6)+,D1    ; space in between addresses
         TST.B   D1  ; if null, no 2nd address, so address2 = address1 + 16
         BNE     MDSPADDR2
@@ -132,6 +137,50 @@ MDSPLOOP    MOVEA.L A7,A1
         BRA     MDSPDONE
 MDSPINV BSR     INVALID ; print invalid command message
 MDSPDONE    MOVEM.L (A7)+,D0-D3/A1-A3
+        RTS
+
+; SORTW, implements bubble sort -- unsigned numbers
+SORTW   MOVEM.L D0-D4/A1-A4,-(A7)
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #$24,D1     ; is it '$'?
+        BNE     SORTWINV    ; wrong command usage
+        BSR     MEM2HEX     ; D1 has 1st address in hex
+        MOVEA.L D1,A2       ; store in A2
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #$20,D1     ; is it ' '?
+        BNE     SORTWINV    ; wrong command usage
+        MOVE.B  (A6)+,D1    ; second '$'
+        CMPI.B  #$24,D1     ; is it '$'?
+        BNE     SORTWINV    ; wrong command usage
+        BSR     MEM2HEX     ; D1 has now the 2nd address
+        MOVEA.L D1,A3       ; store in A3
+        MOVE.B  (A6)+,D1    ; space 
+        CMPI.B  #$20,D1     ; is it ' '?
+        BNE     SORTWINV    ; wrong command usage
+        MOVE.B  (A6)+,D1    ; char either 'A' or 'D'
+        CMPI.B  #$41,D1     ; is it 'A'?
+        BEQ     SORTWLOOP   ; if so, D1 marks ascending
+        CMPI.B  #$44,D1     ; else, is it 'D'?
+        BNE     SORTWINV    ; if it isn't, input was invalid
+        CLR.L   D1          ; if it is, D1=0 marks descending
+SORTWLOOP   MOVEA.L A2,A4   ; first address copied into A4
+SORTWCMP    TST.B   D1      ; tells us whether ascending or descending
+        BEQ     SORTWD  ; do descending
+SORTWA  CMP.W   (A4)+,(A4)+ ; compare next two numbers
+        BCS     SORTWSWAP   ; swap if not in ascending order (if 1st>2nd)
+        BRA     SORTWNEXT   ; otherwise, move on
+SORTWD  CMP.W   (A4)+,(A4)+ ; compare next two numbers
+        BHI     SORTWSWAP   ; swap if not in descending order (if 2nd>1st)
+SORTWNEXT   SUBQ.L  #2,A4   ; look back at previous number
+        CMP.L   A4,A3       
+        BNE     SORTWCMP    ; keep comparing if not at end yet (A3 inclusive)
+        BRA     SORTWDONE   ; else, done
+SORTWSWAP MOVE.L  -(A4),D4   ; move both words to register
+        SWAP.W  D4  ; swap the two words 
+        MOVE.L  D4,(A4) ; write them back
+        BRA     SORTWLOOP   ; loop again from start
+SORTWINV    BSR INVALID
+SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
         RTS
 
 MM    
@@ -201,6 +250,7 @@ H2BSKIPPY   ADD.B   #$30,D7
         RTS
 
     END     START        ; last line of source
+
 
 
 
