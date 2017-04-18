@@ -17,12 +17,14 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
             DC.B    '2MM',0
             DC.B    '4EXIT',0
+            DC.B    '4CONV',$20
             
 COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MDSP
             DC.W    SORTW
             DC.W    MM
             DC.W    EXIT
+            DC.W    CONV
             
 HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'MDSP: Outputs Address And Memory Contents',$A,$D
@@ -38,7 +40,9 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'L: Displays one long word',$A,$D
             DC.B    'MM <address>[ size]',$A,$A,$D
             ** Add all others as I go
-            DC.B    'EXIT: Exit the monitor program eg: EXIT<CR>',0
+            DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
+            DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
+            DC.B    'CONV [$]num eg: CONV 16<CR> returns $10',0
             
 *** RUNNING PROGRAM ***
     ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
@@ -103,7 +107,7 @@ HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
 * eg: MDSP $1230 $1890 <- A6 points to the first '$'
 
 * MDSP -- displays memory block
-MDSP    MOVEM.L D0-D3/A1-A3,-(A7)
+MDSP    MOVEM.L D0-D4/A1-A4,-(A7)
         MOVE.B  (A6)+,D1    ; first '$'
         CMPI.B  #$24,D1 ; is it '$'?
         BNE     MDSPINV ; wrong command usage
@@ -126,21 +130,29 @@ MDSPLOOP    MOVEA.L A7,A1
         MOVE.B  #$20,-(A1)  ; space
         MOVE.B  #$3E,-(A1)  ; '<' for nicer output
         MOVE.L  A2,D1
-        BSR     HEX2MEM ; puts digits of D1 into -8(A1) in ascii
+        BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
         MOVE.B  #$24,-(A1)  ; '$' for nicer output
         MOVE.B  #14,D0
         TRAP    #15     ; print current memory address
         MOVE.B  #$00,-(A1) ; null terminator
         MOVE.B  #$20,-(A1)  ; space
         MOVE.L  (A2)+,D1
-        BSR     HEX2MEM ; puts digits of D1 into -8(A1) in ascii
-        MOVE.B  #13,D0
+        MOVEA.L A1,A4   ; old value of A1
+        BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
+        SUBA.L  A1,A4   ; difference
+        MOVE.L  A4,D4   ; D4 counter to add trailing zeros
+MDSPZEROS CMP.L   #8,D4
+        BGE     MDSPPRINT
+        MOVE.B  #$30,-(A1)
+        ADDQ.L  #1,D4
+        BRA     MDSPZEROS
+MDSPPRINT   MOVE.B  #13,D0
         TRAP    #15
         CMPA.L  A2,A3
         BGT     MDSPLOOP
         BRA     MDSPDONE
 MDSPINV BSR     INVALID ; print invalid command message
-MDSPDONE    MOVEM.L (A7)+,D0-D3/A1-A3
+MDSPDONE    MOVEM.L (A7)+,D0-D4/A1-A4
         RTS
 
 * SORTW -- implements bubble sort (unsigned numbers)
@@ -196,6 +208,26 @@ MM
 * EXIT -- terminates the program
 EXIT    MOVE.B  #9, D0
         TRAP    #15     ; exit program
+        
+* The 2 extra commands:
+* CONV -- takes in hex and returns decimal, or viceversa
+CONV    MOVEM.L D0-D1/A1,-(A7)
+        MOVE.B  (A6)+,D1
+        CMPI.B  #$24,D1 ; is it '$'?
+        BEQ     CONVH2D ; if so, hex to dec
+CONVD2H SUBQ.L  #1,A6   ; point back at first number
+        BSR     MEM2DEC ; D1 contains the decimal number
+        MOVEA.L A6,A1   ; number ready to print
+        BSR     HEX2MEM ; that number is written as hex in memory
+        MOVE.B  #'$',-(A1)
+        BRA     CONVDONE
+CONVH2D BSR     MEM2HEX ; convert ascii to hex
+        MOVEA.L A6,A1   ;number ready to print
+        BSR     DEC2MEM ; convert it back to ascii but as decimal
+CONVDONE MOVE.B #13,D0
+        TRAP    #15 ; print result
+        MOVEM.L (A7)+,D0-D1/A1
+        RTS
 
 *** HELPERS ***
 * Print INVALID message:
@@ -211,27 +243,27 @@ MEM2HEX MOVEM.L D0/D7,-(A7)    ; store in stack
         CLR.L   D1
         MOVE.B (A6)+,D7    ; read in next byte (prime read)
         CMPI.B  #$30,D7
-        BLT     MEM2HEXDONE ; reached some whitespace or non-numeric ascii
-M2HNEXT BSR     BYTE2HEX    ; byte to hex digit, in D7
+        BLT     M2HDONE ; reached some whitespace or non-numeric ascii
+M2HNEXT BSR     ASCII2NUM   ; byte to hex digit, in D7
         ADD.B   D7,D1
         MOVE.B (A6)+,D7    ; read in next byte (prime read)
         CMPI.B  #$30,D7
-        BLT     MEM2HEXDONE ; reached some whitespace or non-numeric ascii
+        BLT     M2HDONE ; reached some whitespace or non-numeric ascii
         ASL.L   #4,D1   ; skip this the last time
         BRA     M2HNEXT ; loop again because not done
-MEM2HEXDONE  SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
+M2HDONE SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
         MOVEM.L (A7)+,D0/D7    ; restore from stack
         RTS
 
-* Takes byte in ascii in D7 and converts it to hex in D7:
+* Takes byte in ascii in D7 and converts it to digit in D7:
 * Assumes 0-9 or A-F
-BYTE2HEX CMPI.B #$40,D7
-        BLT B2HSKIPPY
+ASCII2NUM   CMPI.B #$40,D7
+        BLT A2NSKIPPY
         SUBQ.B  #$7,D7   ; only for A-F
-B2HSKIPPY   SUB.B   #$30,D7
+A2NSKIPPY   SUB.B   #$30,D7
         RTS
         
-* Takes 8 digits from D1 in hex and puts them into -8(A1) in ascii:
+* Takes digits from D1 in hex and puts them into -X(A1) in ascii (no trailing zeros):
 HEX2MEM MOVEM.L D0/D2/D7,-(A7)    ; store in stack
         CLR.L   D0   ; counter
 H2MNEXT MOVE.L  D1,D7
@@ -240,21 +272,54 @@ H2MRIGHT    SUBQ.W  #1,D2
         BLT     H2MDONE
         LSR.L   #4,D7   ; that upper byte to lowest by -> only one left
         BRA     H2MRIGHT
-H2MDONE BSR     HEX2BYTE ; convert to ascii in D7
+H2MDONE TST.L   D7
+        BEQ     H2MEND      ; if number done
+        BSR     NUM2ASCII   ; convert to ascii in D7
         MOVE.B  D7,-(A1)
         ADDQ.W  #1,D0
         CMPI.W  #8,D0
         BLT     H2MNEXT
-        MOVEM.L (A7)+,D0/D2/D7
+H2MEND  MOVEM.L (A7)+,D0/D2/D7
         RTS
 
-* Takes hex digit in D7 and converts it to ascii byte in D7:
+* Takes digit in D7 and converts it to ascii byte in D7:
 * Assumes 0-9 or A-F
-HEX2BYTE AND.L  #$0F,D7 ; mask and take only smallest hex digit
+NUM2ASCII   AND.L  #$0F,D7 ; mask and take only smallest hex digit
         CMPI.B  #$A,D7
-        BLT H2BSKIPPY
+        BLT N2ASKIPPY
         ADDQ.B  #$7,D7   ; only for A-F
-H2BSKIPPY   ADD.B   #$30,D7
+N2ASKIPPY   ADD.B   #$30,D7
+        RTS
+        
+* Takes X digits from (A6) in ascii and puts them in D1 as dec:
+MEM2DEC MOVEM.L D0/D7,-(A7)    ; store in stack
+        CLR.L   D1
+        MOVE.B (A6)+,D7    ; read in next byte (prime read)
+        CMPI.B  #$30,D7
+        BLT     M2DDONE ; reached some whitespace or non-numeric ascii
+M2DNEXT BSR     ASCII2NUM   ; byte to hex digit, in D7
+        ADD.B   D7,D1
+        MOVE.B (A6)+,D7    ; read in next byte (prime read)
+        CMPI.B  #$30,D7
+        BLT     M2DDONE ; reached some whitespace or non-numeric ascii
+        MULU    #10,D1   ; skip this the last time
+        BRA     M2DNEXT ; loop again because not done
+M2DDONE  SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
+        MOVEM.L (A7)+,D0/D7    ; restore from stack
+        RTS
+
+* Takes number from D1 in dec and puts them into -X(A1) in ascii:
+DEC2MEM MOVEM.L D2/D7,-(A7)    ; store in stack
+        MOVE.L  D1,D2
+D2MLOOP DIVU    #10,D2
+        MOVE.L  D2,D7
+        SWAP.W  D7
+        BSR     NUM2ASCII
+        MOVE.B  D7,-(A1)
+        AND.L   #$0000FFFF,D2 ; make sure we use only word in next divisions
+        TST.W   D2
+        BNE     D2MLOOP
+        MOVEM.L (A7)+,D2/D7
         RTS
 
     END     START        ; last line of source
