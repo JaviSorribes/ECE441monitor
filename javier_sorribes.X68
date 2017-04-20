@@ -53,7 +53,7 @@ DF_MSG      DC.B    'D0=XXXXXXXX D1=XXXXXXXX D2=XXXXXXXX D3=XXXXXXXX',$A,$D
             DC.B    'A4=XXXXXXXX A5=XXXXXXXX A6=XXXXXXXX A7=XXXXXXXX',0
 DF_MSG_END
             
-BERR_MSG    DC.B    $D,'BUS ERROR',0
+BERR_MSG    DC.B    $D,'Bus Error Exception',0
             
 *** RUNNING PROGRAM ***
     ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
@@ -366,11 +366,16 @@ D2MLOOP DIVU    #10,D2
         RTS
         
 *** EXCEPTION HANDLERS ***
-BERR    BSR     INVALID
-        BSR     INVALID
+BERR    MOVEM.L D0/A1,-(A7)
+        LEA     BERR_MSG,A1
+        MOVE.B  #13,D0
+        TRAP    #15
+        ;;;;;;;;;;;;;; still need to print 3 special registers
+        BSR     DF  ; print registers
+        MOVEM.L (A7)+,D0/A1 ; do here to be able to modify values of A7
         LEA     STACK,A7    ; next 3 instructions put A7 at beginning of input space in stack
-        SUBA.L  #60,A7
-        SUBA.L  #MAX_IN_LEN,A7
+        SUBA.L  #60,A7  ; 15 registers that occupy 4 bytes each (2*4 = 8 bits)
+        SUBA.L  #MAX_IN_LEN,A7  ; the input space
         BRA     PROMPT
 
 END
