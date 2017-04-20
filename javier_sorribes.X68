@@ -54,7 +54,8 @@ STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored firs
         LEA     STACK,A7
         MOVEM.L D0-D7/A0-A6,-(A7)   ; store all registers in stack. Want to be able to restore them
 
-        **Populate exception vector table
+** Populate exception vector table ***
+        MOVE.L  #BERR,$8
         
 *** MAIN: Prompt, execute and repeat ***
         LEA     WELCOME,A1
@@ -210,8 +211,7 @@ EXIT    ADDA.L  #4,A7   ; move past the PC stored in the stack
         ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
         MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
         MOVEA.L STACK,A7
-        MOVE.B  #9, D0
-        TRAP    #15     ; exit program
+        BRA     END     ; exit program
         
 * The 2 extra commands:
 * CONV -- takes in hex and returns decimal, or viceversa
@@ -325,7 +325,16 @@ D2MLOOP DIVU    #10,D2
         BNE     D2MLOOP
         MOVEM.L (A7)+,D2/D7
         RTS
+        
+*** EXCEPTION HANDLERS ***
+BERR    BSR     INVALID
+        BSR     INVALID
+        LEA     STACK,A7
+        SUBA.L  #120,A7
+        SUBA.L  #MAX_IN_LEN,A7
+        BRA     PROMPT
 
+END
     END     START        ; last line of source
 
 
