@@ -60,10 +60,10 @@ STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored firs
         LEA     WELCOME,A1
         MOVE.B  #13,D0
         TRAP    #15     ; display welcome message
+        SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input (do only once)
 PROMPT  LEA     PROMPT_STR,A1  
         MOVE.B  #14,D0
         TRAP    #15     ; print out prompt
-        SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input
         MOVEA.L A7,A1   ; input will go in stack
         MOVE.B  #2,D0
         TRAP    #15     ; read user input, length stored in D1
@@ -85,14 +85,13 @@ CMP_B   CMPM.B  (A4)+,(A6)+ ; compare byte to byte with command names
         BGE     SEARCH  ; keep on searching
         
         BSR     INVALID ; print invalid command message
-        BRA     ENDLOOP ; prompt again
+        BRA     PROMPT ; prompt again
         
 EXEC    ADDA.L  D3,A5   ; add offset to COM_ADDR start
         MOVEA.L #0,A3   ; clear A3, used for subroutine call
         MOVEA.W (A5),A3 ; move that command's address to register
         JSR     (A3)    ; jump to that command's subroutine (below)
 
-ENDLOOP ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
         BRA     PROMPT  ; prompt again
 
 *** DEBUGGING COMMANDS ***
@@ -207,7 +206,9 @@ MM
         RTS
 
 * EXIT -- terminates the program
-EXIT    MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
+EXIT    ADDA.L  #4,A7   ; move past the PC stored in the stack
+        ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
+        MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
         MOVEA.L STACK,A7
         MOVE.B  #9, D0
         TRAP    #15     ; exit program
@@ -326,6 +327,7 @@ D2MLOOP DIVU    #10,D2
         RTS
 
     END     START        ; last line of source
+
 
 
 
