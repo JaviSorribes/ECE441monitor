@@ -8,6 +8,7 @@
     ORG     $1000       ; stack and other memory
 ; $A is newline, $D carriage return, $20 whitespace
 WELCOME     DC.B    'WELCOME TO MONITOR441! - BY JAVIER SORRIBES',0
+GOODBYE     DC.B    'THANK YOU FOR USING MONITOR441, SEE YOU SOON!',0
 PROMPT_STR  DC.B    $A,$D,'MONITOR441>',0 ; might want to add one space
 INVALID_MSG DC.B    'INVALID COMMAND',$A,$D
             DC.B    'Type HELP for command usage',0
@@ -229,7 +230,10 @@ DFLINE  MOVE.L  -(A0),D1    ; put register value in D1
         RTS
 
 * EXIT -- terminates the program
-EXIT    ADDA.L  #4,A7   ; move past the PC stored in the stack
+EXIT    LEA     GOODBYE,A1
+        MOVE.B  #13,D0
+        TRAP    #15     ; print goodbye message
+        ADDA.L  #4,A7   ; move past the PC stored in the stack
         ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
         MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
         MOVEA.L STACK,A7
