@@ -49,9 +49,10 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
 START:                  ; first instruction of program
 
 MAX_IN_LEN  EQU 80  ; to ensure input won't overflow stack
-STACK       EQU $3000
+STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored first
+        MOVE.L  A7,STACK    ; store original location of stack beforehand
         LEA     STACK,A7
-        MOVEM.L D0-D7/A0-A6,-(A7)   ; store all registers in stack. Want to be able to display them
+        MOVEM.L D0-D7/A0-A6,-(A7)   ; store all registers in stack. Want to be able to restore them
 
         **Populate exception vector table
         
@@ -206,7 +207,9 @@ MM
         RTS
 
 * EXIT -- terminates the program
-EXIT    MOVE.B  #9, D0
+EXIT    MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
+        MOVEA.L STACK,A7
+        MOVE.B  #9, D0
         TRAP    #15     ; exit program
         
 * The 2 extra commands:
@@ -323,6 +326,7 @@ D2MLOOP DIVU    #10,D2
         RTS
 
     END     START        ; last line of source
+
 
 
 
