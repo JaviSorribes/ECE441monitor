@@ -1,6 +1,6 @@
-000012EE Starting Address
+0000140C Starting Address
 Assembler used: EASy68K Editor/Assembler v5.12.29
-Created On: 4/19/2017 8:27:44 PM
+Created On: 4/19/2017 8:59:51 PM
 
 00000000                             1  *-----------------------------------------------------------
 00000000                             2  * Title      : Monitor Design Project
@@ -20,327 +20,352 @@ Created On: 4/19/2017 8:27:44 PM
 0000106D= 34 4D 44 53 50 20         16              DC.B    '4MDSP',$20  ; number specifies length of word 
 00001073= 35 53 4F 52 54 57 20      17              DC.B    '5SORTW',$20    ; used for SEARCH (not input)
 0000107A= 32 4D 4D 00               18              DC.B    '2MM',0
-0000107E= 34 45 58 49 54 00         19              DC.B    '4EXIT',0
-00001084= 34 43 4F 4E 56 20         20              DC.B    '4CONV',$20
-0000108A                            21              
-0000108A= 1360                      22  COM_ADDR    DC.W    HELP        ; Command addresses table
-0000108C= 1374                      23              DC.W    MDSP
-0000108E= 140E                      24              DC.W    SORTW
-00001090= 1496                      25              DC.W    MM
-00001092= 1498                      26              DC.W    EXIT
-00001094= 14AC                      27              DC.W    CONV
-00001096                            28              
-00001096= 48 45 4C 50 3A 20 ...     29  HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
-000010B4= 4D 44 53 50 3A 20 ...     30              DC.B    'MDSP: Outputs Address And Memory Contents',$A,$D
-000010DF= 44 65 66 61 75 6C ...     31              DC.B    'Default address2: address1 + 16',$A,$D
-00001100= 4D 44 53 50 20 3C ...     32              DC.B    'MDSP <address1>[ <address2>] eg: MDSP $908 $904<CR>',$A,$A,$D
-00001136= 53 4F 52 54 57 3A ...     33              DC.B    'SORTW: Sorts Unsigned Words In A Memory Block',$A,$D
-00001165= 42 6F 74 68 20 61 ...     34              DC.B    'Both address1 and address2 are inclusive',$A,$D
-0000118F= 44 65 66 61 75 6C ...     35              DC.B    'Default order: descending',$A,$D
-000011AA= 53 4F 52 54 57 20 ...     36              DC.B    'SORTW <address1> <address2>[ A|D] eg: SORTW $2000 $201E A<CR>',$A,$A,$D
-000011EA= 4D 4D 3A 20 4D 6F ...     37              DC.B    'MM: Modifies Data In Memory',$A,$D
-00001207= 44 65 66 61 75 6C ...     38              DC.B    'Default: Displays one byte',$A,$D
-00001223= 57 3A 20 44 69 73 ...     39              DC.B    'W: Displays one word',$A,$D
-00001239= 4C 3A 20 44 69 73 ...     40              DC.B    'L: Displays one long word',$A,$D
-00001254= 4D 4D 20 3C 61 64 ...     41              DC.B    'MM <address>[ size]',$A,$A,$D
-0000126A                            42              ** Add all others as I go
-0000126A= 45 58 49 54 3A 20 ...     43              DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
-00001298= 43 4F 4E 56 3A 20 ...     44              DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
-000012C5= 43 4F 4E 56 20 5B ...     45              DC.B    'CONV [$]num eg: CONV 16<CR> returns $10',0
-000012ED                            46              
-000012ED                            47  *** RUNNING PROGRAM ***
-000012ED                            48      ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
-000012ED                            49  START:                  ; first instruction of program
-000012ED                            50  
-000012ED  =00000050                 51  MAX_IN_LEN  EQU 80  ; to ensure input won't overflow stack
-000012ED  =00002FFC                 52  STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored first
-000012EE  21CF 2FFC                 53          MOVE.L  A7,STACK    ; store original location of stack beforehand
-000012F2  4FF8 2FFC                 54          LEA     STACK,A7
-000012F6  48E7 FFFE                 55          MOVEM.L D0-D7/A0-A6,-(A7)   ; store all registers in stack. Want to be able to restore them
-000012FA                            56  
-000012FA                            57  ** Populate exception vector table ***
-000012FA  21FC 000015C6 0008        58          MOVE.L  #BERR,$8
-00001302                            59          
-00001302                            60  *** MAIN: Prompt, execute and repeat ***
-00001302  43F8 1000                 61          LEA     WELCOME,A1
-00001306  103C 000D                 62          MOVE.B  #13,D0
-0000130A  4E4F                      63          TRAP    #15     ; display welcome message
-0000130C  9FFC 00000050             64          SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input (do only once)
-00001312  43F8 102C                 65  PROMPT  LEA     PROMPT_STR,A1  
-00001316  103C 000E                 66          MOVE.B  #14,D0
-0000131A  4E4F                      67          TRAP    #15     ; print out prompt
-0000131C  224F                      68          MOVEA.L A7,A1   ; input will go in stack
-0000131E  103C 0002                 69          MOVE.B  #2,D0
-00001322  4E4F                      70          TRAP    #15     ; read user input, length stored in D1
-00001324                            71          
-00001324  49F8 1067                 72          LEA     COM_TABL,A4 ; beginning of command table
-00001328  4BF8 108A                 73          LEA     COM_ADDR,A5 ; end of command table
-0000132C  4283                      74          CLR.L   D3      ; will be the count of where the command is
-0000132E  4282                      75  SEARCH  CLR.L   D2
-00001330  141C                      76          MOVE.B  (A4)+,D2   ; length of next command string
-00001332  0402 0030                 77          SUBI.B  #$30,D2 ; convert ascii num to hex
-00001336  2C49                      78          MOVEA.L A1,A6   ; pointer to input string
-00001338  BD0C                      79  CMP_B   CMPM.B  (A4)+,(A6)+ ; compare byte to byte with command names
-0000133A  56CA FFFC                 80          DBNE    D2,CMP_B    ; keep comparing characters until length is over
-0000133E  4A42                      81          TST.W   D2
-00001340  6D00 0010                 82          BLT     EXEC    ; loop was exhausted and all chars were equal
-00001344  D9C2                      83          ADDA.L  D2,A4   ; go to end of command
-00001346  5483                      84          ADDQ.L  #2,D3   ; else, increment offset by word size
-00001348  BBCC                      85          CMPA.L  A4,A5 ; end of COM_TABL
-0000134A  6CE2                      86          BGE     SEARCH  ; keep on searching
-0000134C                            87          
-0000134C  6100 0196                 88          BSR     INVALID ; print invalid command message
-00001350  60C0                      89          BRA     PROMPT ; prompt again
-00001352                            90          
-00001352  DBC3                      91  EXEC    ADDA.L  D3,A5   ; add offset to COM_ADDR start
-00001354  267C 00000000             92          MOVEA.L #0,A3   ; clear A3, used for subroutine call
-0000135A  3655                      93          MOVEA.W (A5),A3 ; move that command's address to register
-0000135C  4E93                      94          JSR     (A3)    ; jump to that command's subroutine (below)
-0000135E                            95  
-0000135E  60B2                      96          BRA     PROMPT  ; prompt again
-00001360                            97  
-00001360                            98  *** DEBUGGING COMMANDS ***
-00001360                            99  * HELP -- displays help message
-00001360  48E7 8040                100  HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
-00001364  43F8 1096                101          LEA     HELP_MSG,A1  
-00001368  103C 000D                102          MOVE.B  #13,D0
-0000136C  4E4F                     103          TRAP    #15     ; print help message
-0000136E  4CDF 0201                104          MOVEM.L (A7)+,D0/A1 ; restore registers from stack
-00001372  4E75                     105          RTS
-00001374                           106          
-00001374                           107  * For this subroutine and others, A6 contains the start of the command's parameters
-00001374                           108  * eg: MDSP $1230 $1890 <- A6 points to the first '$'
-00001374                           109  
-00001374                           110  * MDSP -- displays memory block
-00001374  48E7 F878                111  MDSP    MOVEM.L D0-D4/A1-A4,-(A7)
-00001378  121E                     112          MOVE.B  (A6)+,D1    ; first '$'
-0000137A  0C01 0024                113          CMPI.B  #$24,D1 ; is it '$'?
-0000137E  6600 0084                114          BNE     MDSPINV ; wrong command usage
-00001382  6100 0174                115          BSR     MEM2HEX ; D1 has 1st address in hex
-00001386  2441                     116          MOVEA.L D1,A2   ;store in A2
-00001388  121E                     117          MOVE.B  (A6)+,D1    ; space in between addresses
-0000138A  4A01                     118          TST.B   D1  ; if null, no 2nd address, so address2 = address1 + 16
-0000138C  6600 000E                119          BNE     MDSPADDR2
-00001390  264A                     120          MOVEA.L A2,A3
-00001392  D7FC 00000010            121          ADDA.L  #16,A3  ; A3 = A2 +16
-00001398  6000 0012                122          BRA     MDSPLOOP
-0000139C  121E                     123  MDSPADDR2   MOVE.B  (A6)+,D1    ; second '$'
-0000139E  0C01 0024                124          CMPI.B  #$24,D1
-000013A2  6600 0060                125          BNE     MDSPINV
-000013A6  6100 0150                126          BSR     MEM2HEX ; D1 has 2nd address in hex
-000013AA  2641                     127          MOVEA.L D1,A3
-000013AC  224F                     128  MDSPLOOP    MOVEA.L A7,A1
-000013AE  93FC 00000040            129          SUBA.L  #$40,A1 ; move A1 far from A7 to avoid collision in subroutines
-000013B4  133C 0000                130          MOVE.B  #$00,-(A1) ; null terminator
-000013B8  133C 0020                131          MOVE.B  #$20,-(A1)  ; space
-000013BC  133C 003E                132          MOVE.B  #$3E,-(A1)  ; '<' for nicer output
-000013C0  220A                     133          MOVE.L  A2,D1
-000013C2  6100 0170                134          BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
-000013C6  133C 0024                135          MOVE.B  #$24,-(A1)  ; '$' for nicer output
-000013CA  103C 000E                136          MOVE.B  #14,D0
-000013CE  4E4F                     137          TRAP    #15     ; print current memory address
-000013D0  133C 0000                138          MOVE.B  #$00,-(A1) ; null terminator
-000013D4  133C 0020                139          MOVE.B  #$20,-(A1)  ; space
-000013D8  221A                     140          MOVE.L  (A2)+,D1
-000013DA  2849                     141          MOVEA.L A1,A4   ; old value of A1
-000013DC  6100 0156                142          BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
-000013E0  99C9                     143          SUBA.L  A1,A4   ; difference
-000013E2  280C                     144          MOVE.L  A4,D4   ; D4 counter to add trailing zeros
-000013E4  B8BC 00000008            145  MDSPZEROS CMP.L   #8,D4
-000013EA  6C00 000A                146          BGE     MDSPPRINT
-000013EE  133C 0030                147          MOVE.B  #$30,-(A1)
-000013F2  5284                     148          ADDQ.L  #1,D4
-000013F4  60EE                     149          BRA     MDSPZEROS
-000013F6  103C 000D                150  MDSPPRINT   MOVE.B  #13,D0
-000013FA  4E4F                     151          TRAP    #15
-000013FC  B7CA                     152          CMPA.L  A2,A3
-000013FE  6EAC                     153          BGT     MDSPLOOP
-00001400  6000 0006                154          BRA     MDSPDONE
-00001404  6100 00DE                155  MDSPINV BSR     INVALID ; print invalid command message
-00001408  4CDF 1E1F                156  MDSPDONE    MOVEM.L (A7)+,D0-D4/A1-A4
-0000140C  4E75                     157          RTS
-0000140E                           158  
-0000140E                           159  * SORTW -- implements bubble sort (unsigned numbers)
-0000140E  48E7 F878                160  SORTW   MOVEM.L D0-D4/A1-A4,-(A7)
-00001412  121E                     161          MOVE.B  (A6)+,D1    ; first '$'
-00001414  0C01 0024                162          CMPI.B  #$24,D1     ; is it '$'?
-00001418  6600 0072                163          BNE     SORTWINV    ; wrong command usage
-0000141C  6100 00DA                164          BSR     MEM2HEX     ; D1 has 1st address in hex
-00001420  2441                     165          MOVEA.L D1,A2       ; store in A2
-00001422  121E                     166          MOVE.B  (A6)+,D1    ; space in between addresses
-00001424  0C01 0020                167          CMPI.B  #$20,D1     ; is it ' '?
-00001428  6600 0062                168          BNE     SORTWINV    ; wrong command usage
-0000142C  121E                     169          MOVE.B  (A6)+,D1    ; second '$'
-0000142E  0C01 0024                170          CMPI.B  #$24,D1     ; is it '$'?
-00001432  6600 0058                171          BNE     SORTWINV    ; wrong command usage
-00001436  6100 00C0                172          BSR     MEM2HEX     ; D1 has now the 2nd address
-0000143A  2641                     173          MOVEA.L D1,A3       ; store in A3
-0000143C  121E                     174          MOVE.B  (A6)+,D1    ; space 
-0000143E  0C01 0000                175          CMPI.B  #$00,D1     ; is it NULL?
-00001442  6700 001C                176          BEQ     SORTWDEF    ; use default: descending (D1=0)
-00001446  0C01 0020                177          CMPI.B  #$20,D1     ; or is it ' '?
-0000144A  6600 0040                178          BNE     SORTWINV    ; wrong command usage
-0000144E  121E                     179          MOVE.B  (A6)+,D1    ; char either 'A' or 'D'
-00001450  0C01 0041                180          CMPI.B  #$41,D1     ; is it 'A'?
-00001454  6700 000C                181          BEQ     SORTWLOOP   ; if so, D1 marks ascending
-00001458  0C01 0044                182          CMPI.B  #$44,D1     ; else, is it 'D'?
-0000145C  6600 002E                183          BNE     SORTWINV    ; if it isn't, input was invalid
-00001460  4281                     184  SORTWDEF    CLR.L   D1          ; if it is, D1=0 marks descending
-00001462  284A                     185  SORTWLOOP   MOVEA.L A2,A4   ; first address copied into A4
-00001464  4A01                     186  SORTWCMP    TST.B   D1      ; tells us whether ascending or descending
-00001466  6700 000C                187          BEQ     SORTWD  ; do descending
-0000146A  B94C                     188  SORTWA  CMP.W   (A4)+,(A4)+ ; compare next two numbers
-0000146C  6500 0016                189          BCS     SORTWSWAP   ; swap if not in ascending order (if 1st>2nd)
-00001470  6000 0008                190          BRA     SORTWNEXT   ; otherwise, move on
-00001474  B94C                     191  SORTWD  CMP.W   (A4)+,(A4)+ ; compare next two numbers
-00001476  6200 000C                192          BHI     SORTWSWAP   ; swap if not in descending order (if 2nd>1st)
-0000147A  558C                     193  SORTWNEXT   SUBQ.L  #2,A4   ; look back at previous number
-0000147C  B7CC                     194          CMP.L   A4,A3       
-0000147E  66E4                     195          BNE     SORTWCMP    ; keep comparing if not at end yet (A3 inclusive)
-00001480  6000 000E                196          BRA     SORTWDONE   ; else, done
-00001484  2824                     197  SORTWSWAP MOVE.L  -(A4),D4   ; move both words to register
-00001486  4844                     198          SWAP.W  D4  ; swap the two words 
-00001488  2884                     199          MOVE.L  D4,(A4) ; write them back
-0000148A  60D6                     200          BRA     SORTWLOOP   ; loop again from start
-0000148C  6100 0056                201  SORTWINV    BSR INVALID
-00001490  4CDF 1E1F                202  SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
-00001494  4E75                     203          RTS
-00001496                           204  
-00001496                           205  * MM -- 
-00001496                           206  MM    
-00001496  4E75                     207          RTS
-00001498                           208  
-00001498                           209  * EXIT -- terminates the program
-00001498  588F                     210  EXIT    ADDA.L  #4,A7   ; move past the PC stored in the stack
-0000149A  DFFC 00000050            211          ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
-000014A0  4CDF 7FFF                212          MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
-000014A4  2E78 2FFC                213          MOVEA.L STACK,A7
-000014A8  6000 0138                214          BRA     END     ; exit program
-000014AC                           215          
-000014AC                           216  * The 2 extra commands:
-000014AC                           217  * CONV -- takes in hex and returns decimal, or viceversa
-000014AC  48E7 C040                218  CONV    MOVEM.L D0-D1/A1,-(A7)
-000014B0  121E                     219          MOVE.B  (A6)+,D1
-000014B2  0C01 0024                220          CMPI.B  #$24,D1 ; is it '$'?
-000014B6  6700 0016                221          BEQ     CONVH2D ; if so, hex to dec
-000014BA  538E                     222  CONVD2H SUBQ.L  #1,A6   ; point back at first number
-000014BC  6100 00BA                223          BSR     MEM2DEC ; D1 contains the decimal number
-000014C0  224E                     224          MOVEA.L A6,A1   ; number ready to print
-000014C2  6100 0070                225          BSR     HEX2MEM ; that number is written as hex in memory
-000014C6  133C 0024                226          MOVE.B  #'$',-(A1)
-000014CA  6000 000C                227          BRA     CONVDONE
-000014CE  6100 0028                228  CONVH2D BSR     MEM2HEX ; convert ascii to hex
-000014D2  224E                     229          MOVEA.L A6,A1   ;number ready to print
-000014D4  6100 00CE                230          BSR     DEC2MEM ; convert it back to ascii but as decimal
-000014D8  103C 000D                231  CONVDONE MOVE.B #13,D0
-000014DC  4E4F                     232          TRAP    #15 ; print result
-000014DE  4CDF 0203                233          MOVEM.L (A7)+,D0-D1/A1
-000014E2  4E75                     234          RTS
-000014E4                           235  
-000014E4                           236  *** HELPERS ***
-000014E4                           237  * Print INVALID message:
-000014E4  48E7 8040                238  INVALID MOVEM.L D0/A1,-(A7)
-000014E8  43F8 103A                239          LEA     INVALID_MSG,A1  ; command was invalid
-000014EC  103C 000D                240          MOVE.B  #13,D0
-000014F0  4E4F                     241          TRAP    #15     ; output invalid command
-000014F2  4CDF 0201                242          MOVEM.L (A7)+,D0/A1
-000014F6  4E75                     243          RTS
-000014F8                           244  
-000014F8                           245  * Takes X digits from (A6) in ascii and puts them in D1 as hex:
-000014F8  48E7 8100                246  MEM2HEX MOVEM.L D0/D7,-(A7)    ; store in stack
-000014FC  4281                     247          CLR.L   D1
-000014FE  1E1E                     248          MOVE.B (A6)+,D7    ; read in next byte (prime read)
-00001500  0C07 0030                249          CMPI.B  #$30,D7
-00001504  6D00 0016                250          BLT     M2HDONE ; reached some whitespace or non-numeric ascii
-00001508  6100 001A                251  M2HNEXT BSR     ASCII2NUM   ; byte to hex digit, in D7
-0000150C  D207                     252          ADD.B   D7,D1
-0000150E  1E1E                     253          MOVE.B (A6)+,D7    ; read in next byte (prime read)
-00001510  0C07 0030                254          CMPI.B  #$30,D7
-00001514  6D00 0006                255          BLT     M2HDONE ; reached some whitespace or non-numeric ascii
-00001518  E981                     256          ASL.L   #4,D1   ; skip this the last time
-0000151A  60EC                     257          BRA     M2HNEXT ; loop again because not done
-0000151C  538E                     258  M2HDONE SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
-0000151E  4CDF 0081                259          MOVEM.L (A7)+,D0/D7    ; restore from stack
-00001522  4E75                     260          RTS
-00001524                           261  
-00001524                           262  * Takes byte in ascii in D7 and converts it to digit in D7:
-00001524                           263  * Assumes 0-9 or A-F
-00001524  0C07 0040                264  ASCII2NUM   CMPI.B #$40,D7
-00001528  6D00 0004                265          BLT A2NSKIPPY
-0000152C  5F07                     266          SUBQ.B  #$7,D7   ; only for A-F
-0000152E  0407 0030                267  A2NSKIPPY   SUB.B   #$30,D7
-00001532  4E75                     268          RTS
-00001534                           269          
-00001534                           270  * Takes digits from D1 in hex and puts them into -X(A1) in ascii (no trailing zeros):
-00001534  48E7 A100                271  HEX2MEM MOVEM.L D0/D2/D7,-(A7)    ; store in stack
-00001538  4280                     272          CLR.L   D0   ; counter
-0000153A  2E01                     273  H2MNEXT MOVE.L  D1,D7
-0000153C  2400                     274          MOVE.L D0,D2
-0000153E  5342                     275  H2MRIGHT    SUBQ.W  #1,D2
-00001540  6D00 0006                276          BLT     H2MDONE
-00001544  E88F                     277          LSR.L   #4,D7   ; that upper byte to lowest by -> only one left
-00001546  60F6                     278          BRA     H2MRIGHT
-00001548  4A87                     279  H2MDONE TST.L   D7
-0000154A  6700 0010                280          BEQ     H2MEND      ; if number done
-0000154E  6100 0012                281          BSR     NUM2ASCII   ; convert to ascii in D7
-00001552  1307                     282          MOVE.B  D7,-(A1)
-00001554  5240                     283          ADDQ.W  #1,D0
-00001556  0C40 0008                284          CMPI.W  #8,D0
-0000155A  6DDE                     285          BLT     H2MNEXT
-0000155C  4CDF 0085                286  H2MEND  MOVEM.L (A7)+,D0/D2/D7
-00001560  4E75                     287          RTS
-00001562                           288  
-00001562                           289  * Takes digit in D7 and converts it to ascii byte in D7:
-00001562                           290  * Assumes 0-9 or A-F
-00001562  CEBC 0000000F            291  NUM2ASCII   AND.L  #$0F,D7 ; mask and take only smallest hex digit
-00001568  0C07 000A                292          CMPI.B  #$A,D7
-0000156C  6D00 0004                293          BLT N2ASKIPPY
-00001570  5E07                     294          ADDQ.B  #$7,D7   ; only for A-F
-00001572  0607 0030                295  N2ASKIPPY   ADD.B   #$30,D7
-00001576  4E75                     296          RTS
-00001578                           297          
-00001578                           298  * Takes X digits from (A6) in ascii and puts them in D1 as dec:
-00001578  48E7 8100                299  MEM2DEC MOVEM.L D0/D7,-(A7)    ; store in stack
-0000157C  4281                     300          CLR.L   D1
-0000157E  1E1E                     301          MOVE.B (A6)+,D7    ; read in next byte (prime read)
-00001580  0C07 0030                302          CMPI.B  #$30,D7
-00001584  6D00 0016                303          BLT     M2DDONE ; reached some whitespace or non-numeric ascii
-00001588  619A                     304  M2DNEXT BSR     ASCII2NUM   ; byte to hex digit, in D7
-0000158A  D207                     305          ADD.B   D7,D1
-0000158C  1E1E                     306          MOVE.B (A6)+,D7    ; read in next byte (prime read)
-0000158E  0C07 0030                307          CMPI.B  #$30,D7
-00001592  6D00 0008                308          BLT     M2DDONE ; reached some whitespace or non-numeric ascii
-00001596  C2FC 000A                309          MULU    #10,D1   ; skip this the last time
-0000159A  60EC                     310          BRA     M2DNEXT ; loop again because not done
-0000159C  538E                     311  M2DDONE  SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
-0000159E  4CDF 0081                312          MOVEM.L (A7)+,D0/D7    ; restore from stack
-000015A2  4E75                     313          RTS
-000015A4                           314  
-000015A4                           315  * Takes number from D1 in dec and puts them into -X(A1) in ascii:
-000015A4  48E7 2100                316  DEC2MEM MOVEM.L D2/D7,-(A7)    ; store in stack
-000015A8  2401                     317          MOVE.L  D1,D2
-000015AA  84FC 000A                318  D2MLOOP DIVU    #10,D2
-000015AE  2E02                     319          MOVE.L  D2,D7
-000015B0  4847                     320          SWAP.W  D7
-000015B2  61AE                     321          BSR     NUM2ASCII
-000015B4  1307                     322          MOVE.B  D7,-(A1)
-000015B6  C4BC 0000FFFF            323          AND.L   #$0000FFFF,D2 ; make sure we use only word in next divisions
-000015BC  4A42                     324          TST.W   D2
-000015BE  66EA                     325          BNE     D2MLOOP
-000015C0  4CDF 0084                326          MOVEM.L (A7)+,D2/D7
-000015C4  4E75                     327          RTS
-000015C6                           328          
-000015C6                           329  *** EXCEPTION HANDLERS ***
-000015C6  6100 FF1C                330  BERR    BSR     INVALID
-000015CA  6100 FF18                331          BSR     INVALID
-000015CE  4FF8 2FFC                332          LEA     STACK,A7
-000015D2  9FFC 00000078            333          SUBA.L  #120,A7
-000015D8  9FFC 00000050            334          SUBA.L  #MAX_IN_LEN,A7
-000015DE  6000 FD32                335          BRA     PROMPT
-000015E2                           336  
-000015E2                           337  END
-Line 338 WARNING: Origin value is odd (Location counter set to next highest address)
-000015E2                           338      END     START        ; last line of source
+0000107E= 32 44 46 00               19              DC.B    '2DF',0
+00001082= 34 45 58 49 54 00         20              DC.B    '4EXIT',0
+00001088= 34 43 4F 4E 56 20         21              DC.B    '4CONV',$20
+0000108E                            22              
+0000108E= 147E                      23  COM_ADDR    DC.W    HELP        ; Command addresses table
+00001090= 1492                      24              DC.W    MDSP
+00001092= 152C                      25              DC.W    SORTW
+00001094= 15B4                      26              DC.W    MM
+00001096= 15B6                      27              DC.W    DF
+00001098= 15E6                      28              DC.W    EXIT
+0000109A= 15FA                      29              DC.W    CONV
+0000109C                            30              
+0000109C= 48 45 4C 50 3A 20 ...     31  HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
+000010BA= 4D 44 53 50 3A 20 ...     32              DC.B    'MDSP: Outputs Address And Memory Contents',$A,$D
+000010E5= 44 65 66 61 75 6C ...     33              DC.B    'Default address2: address1 + 16',$A,$D
+00001106= 4D 44 53 50 20 3C ...     34              DC.B    'MDSP <address1>[ <address2>] eg: MDSP $908 $904<CR>',$A,$A,$D
+0000113C= 53 4F 52 54 57 3A ...     35              DC.B    'SORTW: Sorts Unsigned Words In A Memory Block',$A,$D
+0000116B= 42 6F 74 68 20 61 ...     36              DC.B    'Both address1 and address2 are inclusive',$A,$D
+00001195= 44 65 66 61 75 6C ...     37              DC.B    'Default order: descending',$A,$D
+000011B0= 53 4F 52 54 57 20 ...     38              DC.B    'SORTW <address1> <address2>[ A|D] eg: SORTW $2000 $201E A<CR>',$A,$A,$D
+000011F0= 4D 4D 3A 20 4D 6F ...     39              DC.B    'MM: Modifies Data In Memory',$A,$D
+0000120D= 44 65 66 61 75 6C ...     40              DC.B    'Default: Displays one byte',$A,$D
+00001229= 57 3A 20 44 69 73 ...     41              DC.B    'W: Displays one word',$A,$D
+0000123F= 4C 3A 20 44 69 73 ...     42              DC.B    'L: Displays one long word',$A,$D
+0000125A= 4D 4D 20 3C 61 64 ...     43              DC.B    'MM <address>[ size]',$A,$A,$D
+00001270                            44              ** Add all others as I go
+00001270= 44 46 3A 20 44 69 ...     45              DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
+000012A2= 45 58 49 54 3A 20 ...     46              DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
+000012D0= 43 4F 4E 56 3A 20 ...     47              DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
+000012FD= 43 4F 4E 56 20 5B ...     48              DC.B    'CONV [$]num eg: CONV 16<CR> returns $10',0
+00001325                            49              
+00001325= 0D 00                     50  DF_MSG      DC.B    $D,0    ; erase whatever had been printed on that line
+00001327= 44 30 3D 00 58 58 ...     51              DC.B    'D0=',0,'XXXXXXXX',0,' D1=',0,'XXXXXXXX',0,' D2=',0,'XXXXXXXX',0,' D3=',0,'XXXXXXXX',$A,$D,0
+00001360= 44 34 3D 00 58 58 ...     52              DC.B    'D4=',0,'XXXXXXXX',0,' D5=',0,'XXXXXXXX',0,' D6=',0,'XXXXXXXX',0,' D7=',0,'XXXXXXXX',$A,$D,0
+00001399= 41 30 3D 00 58 58 ...     53              DC.B    'A0=',0,'XXXXXXXX',0,' A1=',0,'XXXXXXXX',0,' A2=',0,'XXXXXXXX',0,' A3=',0,'XXXXXXXX',$A,$D,0
+000013D2= 41 34 3D 00 58 58 ...     54              DC.B    'A4=',0,'XXXXXXXX',0,' A5=',0,'XXXXXXXX',0,' A6=',0,'XXXXXXXX',0,' A7=',0,'XXXXXXXX',$A,$D,0
+0000140B                            55              
+0000140B                            56  *** RUNNING PROGRAM ***
+0000140B                            57      ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
+0000140B                            58  START:                  ; first instruction of program
+0000140B                            59  
+0000140B  =00000050                 60  MAX_IN_LEN  EQU 80  ; to ensure input won't overflow stack
+0000140B  =00002FFC                 61  STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored first
+0000140C  21CF 2FFC                 62          MOVE.L  A7,STACK    ; store original location of stack beforehand
+00001410  4FF8 2FFC                 63          LEA     STACK,A7
+00001414  48E7 FFFE                 64          MOVEM.L D0-D7/A0-A6,-(A7)   ; store all registers in stack. Want to be able to restore them
+00001418                            65  
+00001418                            66  ** Populate exception vector table ***
+00001418  21FC 00001714 0008        67          MOVE.L  #BERR,$8
+00001420                            68          
+00001420                            69  *** MAIN: Prompt, execute and repeat ***
+00001420  43F8 1000                 70          LEA     WELCOME,A1
+00001424  103C 000D                 71          MOVE.B  #13,D0
+00001428  4E4F                      72          TRAP    #15     ; display welcome message
+0000142A  9FFC 00000050             73          SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input (do only once)
+00001430  43F8 102C                 74  PROMPT  LEA     PROMPT_STR,A1  
+00001434  103C 000E                 75          MOVE.B  #14,D0
+00001438  4E4F                      76          TRAP    #15     ; print out prompt
+0000143A  224F                      77          MOVEA.L A7,A1   ; input will go in stack
+0000143C  103C 0002                 78          MOVE.B  #2,D0
+00001440  4E4F                      79          TRAP    #15     ; read user input, length stored in D1
+00001442                            80          
+00001442  49F8 1067                 81          LEA     COM_TABL,A4 ; beginning of command table
+00001446  4BF8 108E                 82          LEA     COM_ADDR,A5 ; end of command table
+0000144A  4283                      83          CLR.L   D3      ; will be the count of where the command is
+0000144C  4282                      84  SEARCH  CLR.L   D2
+0000144E  141C                      85          MOVE.B  (A4)+,D2   ; length of next command string
+00001450  0402 0030                 86          SUBI.B  #$30,D2 ; convert ascii num to hex
+00001454  2C49                      87          MOVEA.L A1,A6   ; pointer to input string
+00001456  BD0C                      88  CMP_B   CMPM.B  (A4)+,(A6)+ ; compare byte to byte with command names
+00001458  56CA FFFC                 89          DBNE    D2,CMP_B    ; keep comparing characters until length is over
+0000145C  4A42                      90          TST.W   D2
+0000145E  6D00 0010                 91          BLT     EXEC    ; loop was exhausted and all chars were equal
+00001462  D9C2                      92          ADDA.L  D2,A4   ; go to end of command
+00001464  5483                      93          ADDQ.L  #2,D3   ; else, increment offset by word size
+00001466  BBCC                      94          CMPA.L  A4,A5 ; end of COM_TABL
+00001468  6CE2                      95          BGE     SEARCH  ; keep on searching
+0000146A                            96          
+0000146A  6100 01C6                 97          BSR     INVALID ; print invalid command message
+0000146E  60C0                      98          BRA     PROMPT ; prompt again
+00001470                            99          
+00001470  DBC3                     100  EXEC    ADDA.L  D3,A5   ; add offset to COM_ADDR start
+00001472  267C 00000000            101          MOVEA.L #0,A3   ; clear A3, used for subroutine call
+00001478  3655                     102          MOVEA.W (A5),A3 ; move that command's address to register
+0000147A  4E93                     103          JSR     (A3)    ; jump to that command's subroutine (below)
+0000147C                           104  
+0000147C  60B2                     105          BRA     PROMPT  ; prompt again
+0000147E                           106  
+0000147E                           107  *** DEBUGGING COMMANDS ***
+0000147E                           108  * HELP -- displays help message
+0000147E  48E7 8040                109  HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
+00001482  43F8 109C                110          LEA     HELP_MSG,A1  
+00001486  103C 000D                111          MOVE.B  #13,D0
+0000148A  4E4F                     112          TRAP    #15     ; print help message
+0000148C  4CDF 0201                113          MOVEM.L (A7)+,D0/A1 ; restore registers from stack
+00001490  4E75                     114          RTS
+00001492                           115          
+00001492                           116  * For this subroutine and others, A6 contains the start of the command's parameters
+00001492                           117  * eg: MDSP $1230 $1890 <- A6 points to the first '$'
+00001492                           118  
+00001492                           119  * MDSP -- displays memory block
+00001492  48E7 F878                120  MDSP    MOVEM.L D0-D4/A1-A4,-(A7)
+00001496  121E                     121          MOVE.B  (A6)+,D1    ; first '$'
+00001498  0C01 0024                122          CMPI.B  #$24,D1 ; is it '$'?
+0000149C  6600 0084                123          BNE     MDSPINV ; wrong command usage
+000014A0  6100 01A4                124          BSR     MEM2HEX ; D1 has 1st address in hex
+000014A4  2441                     125          MOVEA.L D1,A2   ;store in A2
+000014A6  121E                     126          MOVE.B  (A6)+,D1    ; space in between addresses
+000014A8  4A01                     127          TST.B   D1  ; if null, no 2nd address, so address2 = address1 + 16
+000014AA  6600 000E                128          BNE     MDSPADDR2
+000014AE  264A                     129          MOVEA.L A2,A3
+000014B0  D7FC 00000010            130          ADDA.L  #16,A3  ; A3 = A2 +16
+000014B6  6000 0012                131          BRA     MDSPLOOP
+000014BA  121E                     132  MDSPADDR2   MOVE.B  (A6)+,D1    ; second '$'
+000014BC  0C01 0024                133          CMPI.B  #$24,D1
+000014C0  6600 0060                134          BNE     MDSPINV
+000014C4  6100 0180                135          BSR     MEM2HEX ; D1 has 2nd address in hex
+000014C8  2641                     136          MOVEA.L D1,A3
+000014CA  224F                     137  MDSPLOOP    MOVEA.L A7,A1
+000014CC  93FC 00000040            138          SUBA.L  #$40,A1 ; move A1 far from A7 to avoid collision in subroutines
+000014D2  133C 0000                139          MOVE.B  #$00,-(A1) ; null terminator
+000014D6  133C 0020                140          MOVE.B  #$20,-(A1)  ; space
+000014DA  133C 003E                141          MOVE.B  #$3E,-(A1)  ; '<' for nicer output
+000014DE  220A                     142          MOVE.L  A2,D1
+000014E0  6100 01A0                143          BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
+000014E4  133C 0024                144          MOVE.B  #$24,-(A1)  ; '$' for nicer output
+000014E8  103C 000E                145          MOVE.B  #14,D0
+000014EC  4E4F                     146          TRAP    #15     ; print current memory address
+000014EE  133C 0000                147          MOVE.B  #$00,-(A1) ; null terminator
+000014F2  133C 0020                148          MOVE.B  #$20,-(A1)  ; space
+000014F6  221A                     149          MOVE.L  (A2)+,D1
+000014F8  2849                     150          MOVEA.L A1,A4   ; old value of A1
+000014FA  6100 0186                151          BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
+000014FE  99C9                     152          SUBA.L  A1,A4   ; difference
+00001500  280C                     153          MOVE.L  A4,D4   ; D4 counter to add trailing zeros
+00001502  B8BC 00000008            154  MDSPZEROS CMP.L   #8,D4
+00001508  6C00 000A                155          BGE     MDSPPRINT
+0000150C  133C 0030                156          MOVE.B  #$30,-(A1)
+00001510  5284                     157          ADDQ.L  #1,D4
+00001512  60EE                     158          BRA     MDSPZEROS
+00001514  103C 000D                159  MDSPPRINT   MOVE.B  #13,D0
+00001518  4E4F                     160          TRAP    #15
+0000151A  B7CA                     161          CMPA.L  A2,A3
+0000151C  6EAC                     162          BGT     MDSPLOOP
+0000151E  6000 0006                163          BRA     MDSPDONE
+00001522  6100 010E                164  MDSPINV BSR     INVALID ; print invalid command message
+00001526  4CDF 1E1F                165  MDSPDONE    MOVEM.L (A7)+,D0-D4/A1-A4
+0000152A  4E75                     166          RTS
+0000152C                           167  
+0000152C                           168  * SORTW -- implements bubble sort (unsigned numbers)
+0000152C  48E7 F878                169  SORTW   MOVEM.L D0-D4/A1-A4,-(A7)
+00001530  121E                     170          MOVE.B  (A6)+,D1    ; first '$'
+00001532  0C01 0024                171          CMPI.B  #$24,D1     ; is it '$'?
+00001536  6600 0072                172          BNE     SORTWINV    ; wrong command usage
+0000153A  6100 010A                173          BSR     MEM2HEX     ; D1 has 1st address in hex
+0000153E  2441                     174          MOVEA.L D1,A2       ; store in A2
+00001540  121E                     175          MOVE.B  (A6)+,D1    ; space in between addresses
+00001542  0C01 0020                176          CMPI.B  #$20,D1     ; is it ' '?
+00001546  6600 0062                177          BNE     SORTWINV    ; wrong command usage
+0000154A  121E                     178          MOVE.B  (A6)+,D1    ; second '$'
+0000154C  0C01 0024                179          CMPI.B  #$24,D1     ; is it '$'?
+00001550  6600 0058                180          BNE     SORTWINV    ; wrong command usage
+00001554  6100 00F0                181          BSR     MEM2HEX     ; D1 has now the 2nd address
+00001558  2641                     182          MOVEA.L D1,A3       ; store in A3
+0000155A  121E                     183          MOVE.B  (A6)+,D1    ; space 
+0000155C  0C01 0000                184          CMPI.B  #$00,D1     ; is it NULL?
+00001560  6700 001C                185          BEQ     SORTWDEF    ; use default: descending (D1=0)
+00001564  0C01 0020                186          CMPI.B  #$20,D1     ; or is it ' '?
+00001568  6600 0040                187          BNE     SORTWINV    ; wrong command usage
+0000156C  121E                     188          MOVE.B  (A6)+,D1    ; char either 'A' or 'D'
+0000156E  0C01 0041                189          CMPI.B  #$41,D1     ; is it 'A'?
+00001572  6700 000C                190          BEQ     SORTWLOOP   ; if so, D1 marks ascending
+00001576  0C01 0044                191          CMPI.B  #$44,D1     ; else, is it 'D'?
+0000157A  6600 002E                192          BNE     SORTWINV    ; if it isn't, input was invalid
+0000157E  4281                     193  SORTWDEF    CLR.L   D1          ; if it is, D1=0 marks descending
+00001580  284A                     194  SORTWLOOP   MOVEA.L A2,A4   ; first address copied into A4
+00001582  4A01                     195  SORTWCMP    TST.B   D1      ; tells us whether ascending or descending
+00001584  6700 000C                196          BEQ     SORTWD  ; do descending
+00001588  B94C                     197  SORTWA  CMP.W   (A4)+,(A4)+ ; compare next two numbers
+0000158A  6500 0016                198          BCS     SORTWSWAP   ; swap if not in ascending order (if 1st>2nd)
+0000158E  6000 0008                199          BRA     SORTWNEXT   ; otherwise, move on
+00001592  B94C                     200  SORTWD  CMP.W   (A4)+,(A4)+ ; compare next two numbers
+00001594  6200 000C                201          BHI     SORTWSWAP   ; swap if not in descending order (if 2nd>1st)
+00001598  558C                     202  SORTWNEXT   SUBQ.L  #2,A4   ; look back at previous number
+0000159A  B7CC                     203          CMP.L   A4,A3       
+0000159C  66E4                     204          BNE     SORTWCMP    ; keep comparing if not at end yet (A3 inclusive)
+0000159E  6000 000E                205          BRA     SORTWDONE   ; else, done
+000015A2  2824                     206  SORTWSWAP MOVE.L  -(A4),D4   ; move both words to register
+000015A4  4844                     207          SWAP.W  D4  ; swap the two words 
+000015A6  2884                     208          MOVE.L  D4,(A4) ; write them back
+000015A8  60D6                     209          BRA     SORTWLOOP   ; loop again from start
+000015AA  6100 0086                210  SORTWINV    BSR INVALID
+000015AE  4CDF 1E1F                211  SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
+000015B2  4E75                     212          RTS
+000015B4                           213  
+000015B4                           214  * MM -- 
+000015B4                           215  MM    
+000015B4  4E75                     216          RTS
+000015B6                           217          
+000015B6                           218  * DF -- displays formatted registers
+000015B6  48E7 C0C0                219  DF      MOVEM.L D0-D1/A0-A1,-(A7)
+000015BA  41F8 2FFC                220          LEA     STACK,A0
+000015BE  91FC 00000078            221          SUBA.L  #120,A0
+000015C4  91FC 00000050            222          SUBA.L  #MAX_IN_LEN,A0
+000015CA  43F8 1325                223          LEA     DF_MSG,A1
+000015CE  303C 000E                224          MOVE    #14,D0
+000015D2  4E4F                     225          TRAP    #15     ; print carriage return
+000015D4  720F                     226          MOVE.L  #15,D1  ; number of registers - 1 to print
+000015D6  4E4F                     227  DFLOOP  TRAP    #15     ; print register name
+000015D8  2258                     228          MOVE.L  (A0)+,A1    ; put register value in A1
+000015DA  4E4F                     229          TRAP    #15     ; print register value
+000015DC  50C9 FFF8                230          DBT     D1,DFLOOP
+000015E0  4CDF 0303                231          MOVEM.L (A7)+,D0-D1/A0-A1
+000015E4  4E75                     232          RTS
+000015E6                           233  
+000015E6                           234  * EXIT -- terminates the program
+000015E6  588F                     235  EXIT    ADDA.L  #4,A7   ; move past the PC stored in the stack
+000015E8  DFFC 00000050            236          ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
+000015EE  4CDF 7FFF                237          MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
+000015F2  2E78 2FFC                238          MOVEA.L STACK,A7
+000015F6  6000 0138                239          BRA     END     ; exit program
+000015FA                           240          
+000015FA                           241  * The 2 extra commands:
+000015FA                           242  * CONV -- takes in hex and returns decimal, or viceversa
+000015FA  48E7 C040                243  CONV    MOVEM.L D0-D1/A1,-(A7)
+000015FE  121E                     244          MOVE.B  (A6)+,D1
+00001600  0C01 0024                245          CMPI.B  #$24,D1 ; is it '$'?
+00001604  6700 0016                246          BEQ     CONVH2D ; if so, hex to dec
+00001608  538E                     247  CONVD2H SUBQ.L  #1,A6   ; point back at first number
+0000160A  6100 00BA                248          BSR     MEM2DEC ; D1 contains the decimal number
+0000160E  224E                     249          MOVEA.L A6,A1   ; number ready to print
+00001610  6100 0070                250          BSR     HEX2MEM ; that number is written as hex in memory
+00001614  133C 0024                251          MOVE.B  #'$',-(A1)
+00001618  6000 000C                252          BRA     CONVDONE
+0000161C  6100 0028                253  CONVH2D BSR     MEM2HEX ; convert ascii to hex
+00001620  224E                     254          MOVEA.L A6,A1   ;number ready to print
+00001622  6100 00CE                255          BSR     DEC2MEM ; convert it back to ascii but as decimal
+00001626  103C 000D                256  CONVDONE MOVE.B #13,D0
+0000162A  4E4F                     257          TRAP    #15 ; print result
+0000162C  4CDF 0203                258          MOVEM.L (A7)+,D0-D1/A1
+00001630  4E75                     259          RTS
+00001632                           260  
+00001632                           261  *** HELPERS ***
+00001632                           262  * Print INVALID message:
+00001632  48E7 8040                263  INVALID MOVEM.L D0/A1,-(A7)
+00001636  43F8 103A                264          LEA     INVALID_MSG,A1  ; command was invalid
+0000163A  103C 000D                265          MOVE.B  #13,D0
+0000163E  4E4F                     266          TRAP    #15     ; output invalid command
+00001640  4CDF 0201                267          MOVEM.L (A7)+,D0/A1
+00001644  4E75                     268          RTS
+00001646                           269  
+00001646                           270  * Takes X digits from (A6) in ascii and puts them in D1 as hex:
+00001646  48E7 8100                271  MEM2HEX MOVEM.L D0/D7,-(A7)    ; store in stack
+0000164A  4281                     272          CLR.L   D1
+0000164C  1E1E                     273          MOVE.B (A6)+,D7    ; read in next byte (prime read)
+0000164E  0C07 0030                274          CMPI.B  #$30,D7
+00001652  6D00 0016                275          BLT     M2HDONE ; reached some whitespace or non-numeric ascii
+00001656  6100 001A                276  M2HNEXT BSR     ASCII2NUM   ; byte to hex digit, in D7
+0000165A  D207                     277          ADD.B   D7,D1
+0000165C  1E1E                     278          MOVE.B (A6)+,D7    ; read in next byte (prime read)
+0000165E  0C07 0030                279          CMPI.B  #$30,D7
+00001662  6D00 0006                280          BLT     M2HDONE ; reached some whitespace or non-numeric ascii
+00001666  E981                     281          ASL.L   #4,D1   ; skip this the last time
+00001668  60EC                     282          BRA     M2HNEXT ; loop again because not done
+0000166A  538E                     283  M2HDONE SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
+0000166C  4CDF 0081                284          MOVEM.L (A7)+,D0/D7    ; restore from stack
+00001670  4E75                     285          RTS
+00001672                           286  
+00001672                           287  * Takes byte in ascii in D7 and converts it to digit in D7:
+00001672                           288  * Assumes 0-9 or A-F
+00001672  0C07 0040                289  ASCII2NUM   CMPI.B #$40,D7
+00001676  6D00 0004                290          BLT A2NSKIPPY
+0000167A  5F07                     291          SUBQ.B  #$7,D7   ; only for A-F
+0000167C  0407 0030                292  A2NSKIPPY   SUB.B   #$30,D7
+00001680  4E75                     293          RTS
+00001682                           294          
+00001682                           295  * Takes digits from D1 in hex and puts them into -X(A1) in ascii (no trailing zeros):
+00001682  48E7 A100                296  HEX2MEM MOVEM.L D0/D2/D7,-(A7)    ; store in stack
+00001686  4280                     297          CLR.L   D0   ; counter
+00001688  2E01                     298  H2MNEXT MOVE.L  D1,D7
+0000168A  2400                     299          MOVE.L D0,D2
+0000168C  5342                     300  H2MRIGHT    SUBQ.W  #1,D2
+0000168E  6D00 0006                301          BLT     H2MDONE
+00001692  E88F                     302          LSR.L   #4,D7   ; that upper byte to lowest by -> only one left
+00001694  60F6                     303          BRA     H2MRIGHT
+00001696  4A87                     304  H2MDONE TST.L   D7
+00001698  6700 0010                305          BEQ     H2MEND      ; if number done
+0000169C  6100 0012                306          BSR     NUM2ASCII   ; convert to ascii in D7
+000016A0  1307                     307          MOVE.B  D7,-(A1)
+000016A2  5240                     308          ADDQ.W  #1,D0
+000016A4  0C40 0008                309          CMPI.W  #8,D0
+000016A8  6DDE                     310          BLT     H2MNEXT
+000016AA  4CDF 0085                311  H2MEND  MOVEM.L (A7)+,D0/D2/D7
+000016AE  4E75                     312          RTS
+000016B0                           313  
+000016B0                           314  * Takes digit in D7 and converts it to ascii byte in D7:
+000016B0                           315  * Assumes 0-9 or A-F
+000016B0  CEBC 0000000F            316  NUM2ASCII   AND.L  #$0F,D7 ; mask and take only smallest hex digit
+000016B6  0C07 000A                317          CMPI.B  #$A,D7
+000016BA  6D00 0004                318          BLT N2ASKIPPY
+000016BE  5E07                     319          ADDQ.B  #$7,D7   ; only for A-F
+000016C0  0607 0030                320  N2ASKIPPY   ADD.B   #$30,D7
+000016C4  4E75                     321          RTS
+000016C6                           322          
+000016C6                           323  * Takes X digits from (A6) in ascii and puts them in D1 as dec:
+000016C6  48E7 8100                324  MEM2DEC MOVEM.L D0/D7,-(A7)    ; store in stack
+000016CA  4281                     325          CLR.L   D1
+000016CC  1E1E                     326          MOVE.B (A6)+,D7    ; read in next byte (prime read)
+000016CE  0C07 0030                327          CMPI.B  #$30,D7
+000016D2  6D00 0016                328          BLT     M2DDONE ; reached some whitespace or non-numeric ascii
+000016D6  619A                     329  M2DNEXT BSR     ASCII2NUM   ; byte to hex digit, in D7
+000016D8  D207                     330          ADD.B   D7,D1
+000016DA  1E1E                     331          MOVE.B (A6)+,D7    ; read in next byte (prime read)
+000016DC  0C07 0030                332          CMPI.B  #$30,D7
+000016E0  6D00 0008                333          BLT     M2DDONE ; reached some whitespace or non-numeric ascii
+000016E4  C2FC 000A                334          MULU    #10,D1   ; skip this the last time
+000016E8  60EC                     335          BRA     M2DNEXT ; loop again because not done
+000016EA  538E                     336  M2DDONE  SUBA.L #1,A6   ; leave A6 pointing at byte immediately after last number
+000016EC  4CDF 0081                337          MOVEM.L (A7)+,D0/D7    ; restore from stack
+000016F0  4E75                     338          RTS
+000016F2                           339  
+000016F2                           340  * Takes number from D1 in dec and puts them into -X(A1) in ascii:
+000016F2  48E7 2100                341  DEC2MEM MOVEM.L D2/D7,-(A7)    ; store in stack
+000016F6  2401                     342          MOVE.L  D1,D2
+000016F8  84FC 000A                343  D2MLOOP DIVU    #10,D2
+000016FC  2E02                     344          MOVE.L  D2,D7
+000016FE  4847                     345          SWAP.W  D7
+00001700  61AE                     346          BSR     NUM2ASCII
+00001702  1307                     347          MOVE.B  D7,-(A1)
+00001704  C4BC 0000FFFF            348          AND.L   #$0000FFFF,D2 ; make sure we use only word in next divisions
+0000170A  4A42                     349          TST.W   D2
+0000170C  66EA                     350          BNE     D2MLOOP
+0000170E  4CDF 0084                351          MOVEM.L (A7)+,D2/D7
+00001712  4E75                     352          RTS
+00001714                           353          
+00001714                           354  *** EXCEPTION HANDLERS ***
+00001714  6100 FF1C                355  BERR    BSR     INVALID
+00001718  6100 FF18                356          BSR     INVALID
+0000171C  4FF8 2FFC                357          LEA     STACK,A7
+00001720  9FFC 00000078            358          SUBA.L  #120,A7
+00001726  9FFC 00000050            359          SUBA.L  #MAX_IN_LEN,A7
+0000172C  6000 FD02                360          BRA     PROMPT
+00001730                           361  
+00001730                           362  END
+Line 363 WARNING: Origin value is odd (Location counter set to next highest address)
+00001730                           363      END     START        ; last line of source
 
 No errors detected
 1 warning generated
@@ -349,60 +374,63 @@ No errors detected
 SYMBOL TABLE INFORMATION
 Symbol-name         Value
 -------------------------
-A2NSKIPPY           152E
-ASCII2NUM           1524
-BERR                15C6
-CMP_B               1338
-COM_ADDR            108A
+A2NSKIPPY           167C
+ASCII2NUM           1672
+BERR                1714
+CMP_B               1456
+COM_ADDR            108E
 COM_TABL            1067
-CONV                14AC
-CONVD2H             14BA
-CONVDONE            14D8
-CONVH2D             14CE
-D2MLOOP             15AA
-DEC2MEM             15A4
-END                 15E2
-EXEC                1352
-EXIT                1498
-H2MDONE             1548
-H2MEND              155C
-H2MNEXT             153A
-H2MRIGHT            153E
-HELP                1360
-HELP_MSG            1096
-HEX2MEM             1534
-INVALID             14E4
+CONV                15FA
+CONVD2H             1608
+CONVDONE            1626
+CONVH2D             161C
+D2MLOOP             16F8
+DEC2MEM             16F2
+DF                  15B6
+DFLOOP              15D6
+DF_MSG              1325
+END                 1730
+EXEC                1470
+EXIT                15E6
+H2MDONE             1696
+H2MEND              16AA
+H2MNEXT             1688
+H2MRIGHT            168C
+HELP                147E
+HELP_MSG            109C
+HEX2MEM             1682
+INVALID             1632
 INVALID_MSG         103A
-M2DDONE             159C
-M2DNEXT             1588
-M2HDONE             151C
-M2HNEXT             1508
+M2DDONE             16EA
+M2DNEXT             16D6
+M2HDONE             166A
+M2HNEXT             1656
 MAX_IN_LEN          50
-MDSP                1374
-MDSPADDR2           139C
-MDSPDONE            1408
-MDSPINV             1404
-MDSPLOOP            13AC
-MDSPPRINT           13F6
-MDSPZEROS           13E4
-MEM2DEC             1578
-MEM2HEX             14F8
-MM                  1496
-N2ASKIPPY           1572
-NUM2ASCII           1562
-PROMPT              1312
+MDSP                1492
+MDSPADDR2           14BA
+MDSPDONE            1526
+MDSPINV             1522
+MDSPLOOP            14CA
+MDSPPRINT           1514
+MDSPZEROS           1502
+MEM2DEC             16C6
+MEM2HEX             1646
+MM                  15B4
+N2ASKIPPY           16C0
+NUM2ASCII           16B0
+PROMPT              1430
 PROMPT_STR          102C
-SEARCH              132E
-SORTW               140E
-SORTWA              146A
-SORTWCMP            1464
-SORTWD              1474
-SORTWDEF            1460
-SORTWDONE           1490
-SORTWINV            148C
-SORTWLOOP           1462
-SORTWNEXT           147A
-SORTWSWAP           1484
+SEARCH              144C
+SORTW               152C
+SORTWA              1588
+SORTWCMP            1582
+SORTWD              1592
+SORTWDEF            157E
+SORTWDONE           15AE
+SORTWINV            15AA
+SORTWLOOP           1580
+SORTWNEXT           1598
+SORTWSWAP           15A2
 STACK               2FFC
-START               12ED
+START               140B
 WELCOME             1000

@@ -16,6 +16,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '4MDSP',$20  ; number specifies length of word 
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
             DC.B    '2MM',0
+            DC.B    '2DF',0
             DC.B    '4EXIT',0
             DC.B    '4CONV',$20
             
@@ -23,6 +24,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MDSP
             DC.W    SORTW
             DC.W    MM
+            DC.W    DF
             DC.W    EXIT
             DC.W    CONV
             
@@ -40,9 +42,16 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'L: Displays one long word',$A,$D
             DC.B    'MM <address>[ size]',$A,$A,$D
             ** Add all others as I go
+            DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
             DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
             DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
             DC.B    'CONV [$]num eg: CONV 16<CR> returns $10',0
+            
+DF_MSG      DC.B    $D,0    ; erase whatever had been printed on that line
+            DC.B    'D0=',0,'XXXXXXXX',0,' D1=',0,'XXXXXXXX',0,' D2=',0,'XXXXXXXX',0,' D3=',0,'XXXXXXXX',$A,$D,0
+            DC.B    'D4=',0,'XXXXXXXX',0,' D5=',0,'XXXXXXXX',0,' D6=',0,'XXXXXXXX',0,' D7=',0,'XXXXXXXX',$A,$D,0
+            DC.B    'A0=',0,'XXXXXXXX',0,' A1=',0,'XXXXXXXX',0,' A2=',0,'XXXXXXXX',0,' A3=',0,'XXXXXXXX',$A,$D,0
+            DC.B    'A4=',0,'XXXXXXXX',0,' A5=',0,'XXXXXXXX',0,' A6=',0,'XXXXXXXX',0,' A7=',0,'XXXXXXXX',$A,$D,0
             
 *** RUNNING PROGRAM ***
     ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
@@ -204,6 +213,22 @@ SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
 
 * MM -- 
 MM    
+        RTS
+        
+* DF -- displays formatted registers
+DF      MOVEM.L D0-D1/A0-A1,-(A7)
+        LEA     STACK,A0
+        SUBA.L  #120,A0
+        SUBA.L  #MAX_IN_LEN,A0
+        LEA     DF_MSG,A1
+        MOVE    #14,D0
+        TRAP    #15     ; print carriage return
+        MOVE.L  #15,D1  ; number of registers - 1 to print
+DFLOOP  TRAP    #15     ; print register name
+        MOVE.L  (A0)+,A1    ; put register value in A1
+        TRAP    #15     ; print register value
+        DBT     D1,DFLOOP
+        MOVEM.L (A7)+,D0-D1/A0-A1
         RTS
 
 * EXIT -- terminates the program
