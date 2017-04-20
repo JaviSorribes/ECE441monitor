@@ -47,11 +47,13 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
             DC.B    'CONV [$]num eg: CONV 16<CR> returns $10',0
             
-DF_MSG      DC.B    $D,0    ; erase whatever had been printed on that line
-            DC.B    'D0=',0,'XXXXXXXX',0,' D1=',0,'XXXXXXXX',0,' D2=',0,'XXXXXXXX',0,' D3=',0,'XXXXXXXX',$A,$D,0
-            DC.B    'D4=',0,'XXXXXXXX',0,' D5=',0,'XXXXXXXX',0,' D6=',0,'XXXXXXXX',0,' D7=',0,'XXXXXXXX',$A,$D,0
-            DC.B    'A0=',0,'XXXXXXXX',0,' A1=',0,'XXXXXXXX',0,' A2=',0,'XXXXXXXX',0,' A3=',0,'XXXXXXXX',$A,$D,0
-            DC.B    'A4=',0,'XXXXXXXX',0,' A5=',0,'XXXXXXXX',0,' A6=',0,'XXXXXXXX',0,' A7=',0,'XXXXXXXX',$A,$D,0
+DF_MSG      DC.B    'D0=XXXXXXXX D1=XXXXXXXX D2=XXXXXXXX D3=XXXXXXXX',$A,$D
+            DC.B    'D4=XXXXXXXX D5=XXXXXXXX D6=XXXXXXXX D7=XXXXXXXX',$A,$D
+            DC.B    'A0=XXXXXXXX A1=XXXXXXXX A2=XXXXXXXX A3=XXXXXXXX',$A,$D
+            DC.B    'A4=XXXXXXXX A5=XXXXXXXX A6=XXXXXXXX A7=XXXXXXXX',0
+DF_MSG_END
+            
+BERR_MSG    DC.B    $D,'BUS ERROR',0
             
 *** RUNNING PROGRAM ***
     ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
@@ -147,17 +149,9 @@ MDSPLOOP    MOVEA.L A7,A1
         MOVE.B  #$00,-(A1) ; null terminator
         MOVE.B  #$20,-(A1)  ; space
         MOVE.L  (A2)+,D1
-        MOVEA.L A1,A4   ; old value of A1
         BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
-        SUBA.L  A1,A4   ; difference
-        MOVE.L  A4,D4   ; D4 counter to add trailing zeros
-MDSPZEROS CMP.L   #8,D4
-        BGE     MDSPPRINT
-        MOVE.B  #$30,-(A1)
-        ADDQ.L  #1,D4
-        BRA     MDSPZEROS
-MDSPPRINT   MOVE.B  #13,D0
-        TRAP    #15
+        MOVE.B  #13,D0
+        TRAP    #15     ; print
         CMPA.L  A2,A3
         BGT     MDSPLOOP
         BRA     MDSPDONE
@@ -216,19 +210,22 @@ MM
         RTS
         
 * DF -- displays formatted registers
-DF      MOVEM.L D0-D1/A0-A1,-(A7)
+DF      MOVEM.L D0-D2/A0-A1,-(A7)
         LEA     STACK,A0
-        SUBA.L  #120,A0
-        SUBA.L  #MAX_IN_LEN,A0
-        LEA     DF_MSG,A1
-        MOVE    #14,D0
-        TRAP    #15     ; print carriage return
-        MOVE.L  #15,D1  ; number of registers - 1 to print
-DFLOOP  TRAP    #15     ; print register name
-        MOVE.L  (A0)+,A1    ; put register value in A1
+        ADDA.L  #4,A0   ; placed after A7 in stack
+        LEA     DF_MSG_END,A1
+DFLOOP  SUBQ.L  #1,A1   ; pass the $A at end of each line
+        MOVE.L  #3,D2   ; number of registers per line - 1
+DFLINE  MOVE.L  -(A0),D1    ; put register value in D1
+        BSR     HEX2MEM     ; will store D1 in -8(A1)
+        SUBQ.L  #4,A1   ; skip other characters
+        DBF     D2,DFLINE   ; keep looping till line done       
+        CMP.L   #DF_MSG,A1
+        BGT     DFLOOP
+        ADDQ.L  #1,A1   ; put back at the front of the message
+        MOVE.B  #13,D0
         TRAP    #15     ; print register value
-        DBT     D1,DFLOOP
-        MOVEM.L (A7)+,D0-D1/A0-A1
+        MOVEM.L (A7)+,D0-D2/A0-A1
         RTS
 
 * EXIT -- terminates the program
@@ -247,7 +244,7 @@ CONV    MOVEM.L D0-D1/A1,-(A7)
 CONVD2H SUBQ.L  #1,A6   ; point back at first number
         BSR     MEM2DEC ; D1 contains the decimal number
         MOVEA.L A6,A1   ; number ready to print
-        BSR     HEX2MEM ; that number is written as hex in memory
+        BSR     HEX2MEM_NOZ ; that number is written as hex in memory
         MOVE.B  #'$',-(A1)
         BRA     CONVDONE
 CONVH2D BSR     MEM2HEX ; convert ascii to hex
@@ -292,7 +289,7 @@ ASCII2NUM   CMPI.B #$40,D7
 A2NSKIPPY   SUB.B   #$30,D7
         RTS
         
-* Takes digits from D1 in hex and puts them into -X(A1) in ascii (no trailing zeros):
+* Takes 8 digits from D1 in hex and puts them into -8(A1) in ascii:
 HEX2MEM MOVEM.L D0/D2/D7,-(A7)    ; store in stack
         CLR.L   D0   ; counter
 H2MNEXT MOVE.L  D1,D7
@@ -301,14 +298,31 @@ H2MRIGHT    SUBQ.W  #1,D2
         BLT     H2MDONE
         LSR.L   #4,D7   ; that upper byte to lowest by -> only one left
         BRA     H2MRIGHT
-H2MDONE TST.L   D7
-        BEQ     H2MEND      ; if number done
-        BSR     NUM2ASCII   ; convert to ascii in D7
+H2MDONE BSR     NUM2ASCII   ; convert to ascii in D7
         MOVE.B  D7,-(A1)
         ADDQ.W  #1,D0
         CMPI.W  #8,D0
         BLT     H2MNEXT
-H2MEND  MOVEM.L (A7)+,D0/D2/D7
+        MOVEM.L (A7)+,D0/D2/D7
+        RTS
+        
+* Takes X digits from D1 in hex and puts them into -X(A1) in ascii (no trailing zeros):
+HEX2MEM_NOZ MOVEM.L D0/D2/D7,-(A7)    ; store in stack
+        CLR.L   D0   ; counter
+H2MZNEXT MOVE.L  D1,D7
+        MOVE.L D0,D2
+H2MZRIGHT    SUBQ.W  #1,D2
+        BLT     H2MZDONE
+        LSR.L   #4,D7   ; that upper byte to lowest by -> only one left
+        BRA     H2MZRIGHT
+H2MZDONE TST.L   D7
+        BEQ     H2MZEND      ; if number done
+        BSR     NUM2ASCII   ; convert to ascii in D7
+        MOVE.B  D7,-(A1)
+        ADDQ.W  #1,D0
+        CMPI.W  #8,D0
+        BLT     H2MZNEXT
+H2MZEND  MOVEM.L (A7)+,D0/D2/D7
         RTS
 
 * Takes digit in D7 and converts it to ascii byte in D7:
@@ -354,13 +368,14 @@ D2MLOOP DIVU    #10,D2
 *** EXCEPTION HANDLERS ***
 BERR    BSR     INVALID
         BSR     INVALID
-        LEA     STACK,A7
-        SUBA.L  #120,A7
+        LEA     STACK,A7    ; next 3 instructions put A7 at beginning of input space in stack
+        SUBA.L  #60,A7
         SUBA.L  #MAX_IN_LEN,A7
         BRA     PROMPT
 
 END
     END     START        ; last line of source
+
 
 
 
