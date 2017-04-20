@@ -59,7 +59,7 @@ BERR_MSG    DC.B    $D,'Bus Error Exception',0
 ILLINS_MSG  DC.B    $D,'Illegal Instructor Exception',0
 PRIVERR_MSG DC.B    $D,'Privilege Error Exception',0
 DIV0_MSG    DC.B    $D,'Division By Zero Exception',0
-CHKERR_MSG     DC.B    $D,'Check Exception',0
+CHKERR_MSG  DC.B    $D,'Check Exception',0
 LINEA_MSG   DC.B    $D,'Line A Exception',0
 LINEF_MSG   DC.B    $D,'Line F Exception',0
             
@@ -385,11 +385,13 @@ D2MLOOP DIVU    #10,D2
         
 *** EXCEPTION HANDLERS ***
 ADDRERR MOVEM.L D0/A1,-(A7)
+        MOVEM.L D1/A0,-(A7) ; specific for this interrupt
         LEA     ADDRERR_MSG,A1
         MOVE.B  #13,D0
         TRAP    #15
         BRA     INTERR_REG  ; print the special registers
 BERR    MOVEM.L D0/A1,-(A7)
+        MOVEM.L D1/A0,-(A7) ; specific for this interrupt
         LEA     BERR_MSG,A1
         MOVE.B  #13,D0
         TRAP    #15
@@ -413,7 +415,24 @@ LINEF   MOVEM.L D0/A1,-(A7)
         LEA     LINEF_MSG,A1
         BRA     INTERR
 INTERR_REG  ; only BERR and ADDRERR do this
-        ;;;;;;;;;;;;;; still need to print 3 special registers   
+        MOVEA.L A7,A0
+        ADDA.L  #24,A0  ; A0 is pointing right below SSW, BA and IR
+        MOVEA.L #STACK,A1
+        SUBA.L  #60,A1  ; write message in the input space of the stack (currently unused)
+        MOVE.B  #0,-(A1)    ; null terminator
+        CLR.L   D1
+        MOVE.W  -(A0),D1    ; SSW in D1
+        BSR     HEX2MEM
+        ADDQ.L  #4,A1       ; only want SSW to be a word
+        MOVE.B  #' ',-(A1)
+        MOVE.L  -(A0),D1    ; BA in D1
+        BSR     HEX2MEM
+        MOVE.B  #' ',-(A1)
+        CLR.L   D1
+        MOVE.W  -(A0),D1    ; IR in D1
+        BSR     HEX2MEM
+        ADDQ.L  #4,A1       ; only want IR to be a word
+        MOVEM.L (A7)+,D1/A0 ; restore these specific registers
 INTERR  MOVE.B  #13,D0
         TRAP    #15 ; print corresponding message for that interrupt
         BSR     DF  ; print registers
@@ -425,6 +444,7 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
+
 
 
 
