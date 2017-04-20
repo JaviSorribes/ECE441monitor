@@ -53,8 +53,15 @@ DF_MSG      DC.B    'D0=XXXXXXXX D1=XXXXXXXX D2=XXXXXXXX D3=XXXXXXXX',$A,$D
             DC.B    'A0=XXXXXXXX A1=XXXXXXXX A2=XXXXXXXX A3=XXXXXXXX',$A,$D
             DC.B    'A4=XXXXXXXX A5=XXXXXXXX A6=XXXXXXXX A7=XXXXXXXX',0
 DF_MSG_END
-            
+         
+ADDRERR_MSG DC.B    $D,'Address Error Exception',0   
 BERR_MSG    DC.B    $D,'Bus Error Exception',0
+ILLINS_MSG  DC.B    $D,'Illegal Instructor Exception',0
+PRIVERR_MSG DC.B    $D,'Privilege Error Exception',0
+DIV0_MSG    DC.B    $D,'Division By Zero Exception',0
+CHKERR_MSG     DC.B    $D,'Check Exception',0
+LINEA_MSG   DC.B    $D,'Line A Exception',0
+LINEF_MSG   DC.B    $D,'Line F Exception',0
             
 *** RUNNING PROGRAM ***
     ;ORG     $1200 --> allow for as much as necessary before this, and add program right after it
@@ -68,6 +75,13 @@ STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored firs
 
 ** Populate exception vector table ***
         MOVE.L  #BERR,$8
+        MOVE.L  #ADDRERR,$C
+        MOVE.L  #ILLINS,$10
+        MOVE.L  #DIV0,$14
+        MOVE.L  #CHKERR,$18
+        MOVE.L  #PRIVERR,$20
+        MOVE.L  #LINEA,$28
+        MOVE.L  #LINEF,$2C
         
 *** MAIN: Prompt, execute and repeat ***
         LEA     WELCOME,A1
@@ -370,11 +384,38 @@ D2MLOOP DIVU    #10,D2
         RTS
         
 *** EXCEPTION HANDLERS ***
+ADDRERR MOVEM.L D0/A1,-(A7)
+        LEA     ADDRERR_MSG,A1
+        MOVE.B  #13,D0
+        TRAP    #15
+        BRA     INTERR_REG  ; print the special registers
 BERR    MOVEM.L D0/A1,-(A7)
         LEA     BERR_MSG,A1
         MOVE.B  #13,D0
         TRAP    #15
-        ;;;;;;;;;;;;;; still need to print 3 special registers
+        BRA     INTERR_REG  ; print the special registers
+ILLINS  MOVEM.L D0/A1,-(A7)
+        LEA     ILLINS_MSG,A1
+        BRA     INTERR 
+PRIVERR MOVEM.L D0/A1,-(A7)
+        LEA     PRIVERR_MSG,A1
+        BRA     INTERR 
+DIV0    MOVEM.L D0/A1,-(A7)
+        LEA     DIV0_MSG,A1
+        BRA     INTERR 
+CHKERR  MOVEM.L D0/A1,-(A7)
+        LEA     CHKERR_MSG,A1
+        BRA     INTERR 
+LINEA   MOVEM.L D0/A1,-(A7)
+        LEA     LINEA_MSG,A1
+        BRA     INTERR 
+LINEF   MOVEM.L D0/A1,-(A7)
+        LEA     LINEF_MSG,A1
+        BRA     INTERR
+INTERR_REG  ; only BERR and ADDRERR do this
+        ;;;;;;;;;;;;;; still need to print 3 special registers   
+INTERR  MOVE.B  #13,D0
+        TRAP    #15 ; print corresponding message for that interrupt
         BSR     DF  ; print registers
         MOVEM.L (A7)+,D0/A1 ; do here to be able to modify values of A7
         LEA     STACK,A7    ; next 3 instructions put A7 at beginning of input space in stack
