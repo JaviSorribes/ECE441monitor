@@ -279,13 +279,15 @@ BFINV   BSR     INVALID
 BFDONE  MOVEM.L (A7)+,D0-D3/D7/A1-A3
         RTS
         
-* GO -- executes another program. Allows it to change registers
-GO      MOVE.B  (A6)+,D1    ; '$'
+* GO -- executes another program
+GO      MOVEM.L D0-D7/A0-A7,-(A7)   ; don't allow the program to change registers
+        MOVE.B  (A6)+,D1    ; '$'
         CMPI.B  #$24,D1 ; is it '$'?
         BNE     INVALID ; wrong command usage
         BSR     MEM2HEX ; D1 has address in hex
         MOVEA.L D1,A0   ;store in A0
         JSR     (A0)    ; execute the program
+        MOVEM.L (A7)+,D0-D7/A0-A7
         RTS
         
 * DF -- displays formatted registers
@@ -505,10 +507,17 @@ INTERR  MOVE.B  #13,D0
         SUBA.L  #60,A7  ; 15 registers that occupy 4 bytes each (2*4 = 8 bits)
         SUBA.L  #MAX_IN_LEN,A7  ; the input space
         BRA     PROMPT
+        
+*** PROGRAM FOR TESTING GO ***    
+    ORG $4000
+        MOVEA.L #$4020,A1
+        MOVE.L  #$48492100,(A1)
+        MOVE.B  #13,D0
+        TRAP    #15     ; print secret message
+        RTS
 
 END
     END     START        ; last line of source
-
 
 
 
