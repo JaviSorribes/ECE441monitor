@@ -17,6 +17,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '4MDSP',$20  ; number specifies length of word 
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
             DC.B    '2MM',0
+            DC.B    '2BF',$20
             DC.B    '2DF',0
             DC.B    '4EXIT',0
             DC.B    '4CONV',$20
@@ -25,6 +26,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MDSP
             DC.W    SORTW
             DC.W    MM
+            DC.W    BF
             DC.W    DF
             DC.W    EXIT
             DC.W    CONV
@@ -42,6 +44,11 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'W: Displays one word',$A,$D
             DC.B    'L: Displays one long word',$A,$D
             DC.B    'MM <address>[ size]',$A,$A,$D
+            DC.B    'BF: Fills Block Of Memory With Word Pattern',$A,$D
+            DC.B    'Both addresses must be even',$A,$D
+            DC.B    'Default pattern: 0000',$A,$D
+            DC.B    'If less than 4 digits given, right justified and zero padded',$A,$D
+            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325',$A,$A,$D
             ** Add all others as I go
             DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
             DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
@@ -222,6 +229,44 @@ SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
 
 * MM -- 
 MM    
+        RTS
+
+* BF -- fills block of memory with word pattern
+BF      MOVEM.L D0-D3/D7/A1-A3,-(A7)
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #$24,D1 ; is it '$'?
+        BNE     BFINV ; wrong command usage
+        BSR     MEM2HEX ; D1 has 1st address in hex
+        MOVEA.L D1,A2   ;store in A2
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #$20,D1 ; is it ' '?
+        BNE     BFINV
+        MOVE.B  (A6)+,D1    ; second '$'
+        CMPI.B  #$24,D1
+        BNE     BFINV   
+        BSR     MEM2HEX ; D1 has 2nd address in hex
+        MOVEA.L D1,A3   ; both addresses have been read now
+        CLR.L   D2      ; pattern will go in here
+        MOVE.B  (A6)+,D1    ; space before the pattern
+        CMPI.B  #$00,D1 ; no pattern given, use default
+        BEQ     BFSTART
+        CMPI.B  #$20,D1 ; is it ' '?
+        BNE     BFINV
+        MOVE.L  #3,D3   ; counter for remaining 3 digits (if there)
+BFPATT  MOVE.B  (A6)+,D7    ; first byte of pattern
+        TST.B   D7
+        BEQ     BFSTART ; only one digit was given, use first one padded with a zero
+        ASL.L   #4,D2   ; place first digit on the left part of the byte
+        BSR     ASCII2NUM
+        ADD.B   D7,D2   ; goes into the right part of the byte
+        DBF     D3,BFPATT   ; debrease D3 and keep looping until all digits read
+BFSTART MOVE.W  (A3),D3 ; TEST: if address2 not even, address error is raised
+BFLOOP  CMPA.L  A2,A3
+        BLE     BFDONE  ; done when A2 reaches A3
+        MOVE.W  D2,(A2)+    ; write the pattern in memory. Address error raised if address1 not even
+        BRA     BFLOOP
+BFINV   BSR     INVALID
+BFDONE  MOVEM.L (A7)+,D0-D3/D7/A1-A3
         RTS
         
 * DF -- displays formatted registers
@@ -444,6 +489,7 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
+
 
 
 
