@@ -18,6 +18,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
             DC.B    '2MM',0
             DC.B    '2BF',$20
+            DC.B    '2GO',$20
             DC.B    '2DF',0
             DC.B    '4EXIT',0
             DC.B    '4CONV',$20
@@ -27,6 +28,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    SORTW
             DC.W    MM
             DC.W    BF
+            DC.W    GO
             DC.W    DF
             DC.W    EXIT
             DC.W    CONV
@@ -48,8 +50,10 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'Both addresses must be even',$A,$D
             DC.B    'Default pattern: 0000',$A,$D
             DC.B    'If less than 4 digits given, right justified and zero padded',$A,$D
-            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325',$A,$A,$D
+            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',$A,$A,$D
             ** Add all others as I go
+            DC.B    'GO: Execute Another Program',$A,$D
+            DC.B    'GO <address1>',$A,$A,$D
             DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
             DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
             DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
@@ -267,6 +271,15 @@ BFLOOP  CMPA.L  A2,A3
         BRA     BFLOOP
 BFINV   BSR     INVALID
 BFDONE  MOVEM.L (A7)+,D0-D3/D7/A1-A3
+        RTS
+        
+* GO -- executes another program. Allows it to change registers
+GO      MOVE.B  (A6)+,D1    ; '$'
+        CMPI.B  #$24,D1 ; is it '$'?
+        BNE     INVALID ; wrong command usage
+        BSR     MEM2HEX ; D1 has address in hex
+        MOVEA.L D1,A0   ;store in A0
+        JSR     (A0)    ; execute the program
         RTS
         
 * DF -- displays formatted registers
@@ -489,6 +502,7 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
+
 
 
 
