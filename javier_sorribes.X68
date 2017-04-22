@@ -50,7 +50,8 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'Both addresses must be even',$A,$D
             DC.B    'Default pattern: 0000',$A,$D
             DC.B    'If less than 4 digits given, right justified and zero padded',$A,$D
-            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',$A,$A,$D
+            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',$A,$D,0
+HELP_MSG2
             ** Add all others as I go
             DC.B    'GO: Execute Another Program',$A,$D
             DC.B    'GO <address1>',$A,$A,$D
@@ -134,11 +135,16 @@ EXEC    ADDA.L  D3,A5   ; add offset to COM_ADDR start
 
 *** DEBUGGING COMMANDS ***
 * HELP -- displays help message
-HELP    MOVEM.L D0/A1,-(A7) ; store used registers in stack
+HELP    MOVEM.L D0-D1/A1,-(A7) ; store used registers in stack
         LEA     HELP_MSG,A1  
         MOVE.B  #13,D0
-        TRAP    #15     ; print help message
-        MOVEM.L (A7)+,D0/A1 ; restore registers from stack
+        TRAP    #15     ; print first part of the help message
+        MOVE.B  #5,D0
+        TRAP    #15
+        LEA     HELP_MSG2,A1
+        MOVE.B  #13,D0
+        TRAP    #15
+        MOVEM.L (A7)+,D0-D1/A1 ; restore registers from stack
         RTS
         
 * For this subroutine and others, A6 contains the start of the command's parameters
@@ -502,7 +508,6 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
-
 
 
 
