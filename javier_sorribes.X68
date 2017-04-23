@@ -16,7 +16,7 @@ INVALID_MSG DC.B    'INVALID COMMAND',$A,$D
 COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '4MDSP',$20  ; number specifies length of word 
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
-            DC.B    '2MM',0
+            DC.B    '2MM',$20
             DC.B    '2BF',$20
             DC.B    '2GO',$20
             DC.B    '2DF',0
@@ -50,7 +50,7 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'Both addresses must be even',$A,$D
             DC.B    'Default pattern: 0000',$A,$D
             DC.B    'If less than 4 digits given, right justified and zero padded',$A,$D
-            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',$A,$D,0
+            DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',0
 HELP_MSG2
             ** Add all others as I go
             DC.B    'GO: Execute Another Program',$A,$D
@@ -140,10 +140,10 @@ HELP    MOVEM.L D0-D1/A1,-(A7) ; store used registers in stack
         MOVE.B  #13,D0
         TRAP    #15     ; print first part of the help message
         MOVE.B  #5,D0
-        TRAP    #15
+        TRAP    #15     ; wait for the user to enter a character
         LEA     HELP_MSG2,A1
         MOVE.B  #13,D0
-        TRAP    #15
+        TRAP    #15     ; print second half of the message
         MOVEM.L (A7)+,D0-D1/A1 ; restore registers from stack
         RTS
         
@@ -172,15 +172,14 @@ MDSPLOOP    MOVEA.L A7,A1
         SUBA.L  #$40,A1 ; move A1 far from A7 to avoid collision in subroutines
         MOVE.B  #$00,-(A1) ; null terminator
         MOVE.B  #$20,-(A1)  ; space
-        MOVE.B  #$3E,-(A1)  ; '<' for nicer output
-        MOVE.L  A2,D1
+        MOVE.B  #$3E,-(A1)  ; '>' for nicer output
+        MOVE.L  A2,D1   ; memory address into D1
         BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
         MOVE.B  #$24,-(A1)  ; '$' for nicer output
         MOVE.B  #14,D0
         TRAP    #15     ; print current memory address
-        MOVE.B  #$00,-(A1) ; null terminator
-        MOVE.B  #$20,-(A1)  ; space
-        MOVE.L  (A2)+,D1
+        MOVE.B  #$00,-(A1)  ; null terminator
+        MOVE.L  (A2)+,D1    ; memory value into D1
         BSR     HEX2MEM ; puts digits of D1 into -X(A1) in ascii (no trailing zeros)
         MOVE.B  #13,D0
         TRAP    #15     ; print
@@ -237,8 +236,103 @@ SORTWINV    BSR INVALID
 SORTWDONE   MOVEM.L (A7)+,D0-D4/A1-A4
         RTS
 
-* MM -- 
-MM    
+* MM -- modifies data in memory. Size can be B, W or L
+MM      MOVEM.L D0-D1/A0-A1,-(A7)
+        MOVEA.L A6,A1   ; A1 used for I/O later
+        MOVE.B  (A6)+,D1    ; '$'
+        CMPI.B  #$24,D1 ; is it '$'?
+        BNE     INVALID ; wrong command usage
+        BSR     MEM2HEX ; D1 has address in hex
+        MOVEA.L D1,A0   ;store in A0
+        MOVE.B  (A6)+,D1    ; ' ' before option
+        CMPI.B  #0,D1       ; is it null?
+        BEQ     MMBYTE  ; use default: byte
+        CMPI.B  #$20,D1 ; is it ' '?
+        BNE     INVALID ; wrong command usage
+        MOVE.B  (A6)+,D1    ; the option
+        CMPI.B  #'B',D1
+        BEQ     MMBYTE
+        CMPI.B  #'W',D1
+        BEQ     MMWORD
+        CMPI.B  #'L',D1
+        BEQ     MMLONG
+        BRA     MMINV   ; wrong option
+MMBYTE  ADDA.L  #14,A1  ; output will be 13 chars long + null
+        MOVE.B  #0,-(A1)    ; null terminator
+        MOVE.B  #'?',-(A1)  ; nicer output
+        CLR.L   D1
+        MOVE.B  (A0),D1     ; content of memory to D1
+        BSR     HEX2MEM     ; writes memory content to -8(A1)
+        ADDA.L  #6,A1       ; we only want 2 chars, not 8
+        MOVE.B  #$9,-(A1)   ; a tabspace
+        MOVE.L  A0,D1       ; memory address
+        BSR     HEX2MEM     ; memory address to -8(A1)
+        MOVE.B  #'$',-(A1)  ; nicer output
+        MOVE.B  #14,D0
+        TRAP    #15         ; print
+        MOVE.B  #2,D0
+        TRAP    #15         ; read new value, if any
+        CMPI.B  #0,(A1)
+        BNE     MMBNEXT     ; skip memory address?
+        ADDA.L  #1,A0       ; if yes, increment A0
+        BRA     MMBYTE      ; ...and loop
+MMBNEXT CMPI.B  #'.',(A1)   ; else, check if done (entered '.')
+        BEQ     MMDONE
+        MOVEA.L A1,A6       ; new value to write in!
+        BSR     MEM2HEX     ; store input value from A6 in D1
+        MOVE.B  D1,(A0)+    ; put it in address location
+        BRA     MMBYTE      ; and loop!
+MMWORD  ADDA.L  #16,A1  ; output will be 15 chars long + null
+        MOVE.B  #0,-(A1)
+        MOVE.B  #'?',-(A1)
+        CLR.L   D1
+        MOVE.W  (A0),D1
+        BSR     HEX2MEM     ; writes memory content to -8(A1)
+        ADDA.L  #4,A1       ; we only want 4 chars, not 8
+        MOVE.B  #$9,-(A1)   ; a tabspace
+        MOVE.L  A0,D1
+        BSR     HEX2MEM     ; memory address to -8(A1)
+        MOVE.B  #'$',-(A1)
+        MOVE.B  #14,D0
+        TRAP    #15         ; print
+        MOVE.B  #2,D0
+        TRAP    #15         ; read new value, if any
+        CMPI.B  #0,(A1)
+        BNE     MMWNEXT     ; skip memory address?
+        ADDA.L  #2,A0       ; if yes, increment A0
+        BRA     MMWORD      ; ...and loop
+MMWNEXT CMPI.B  #'.',(A1)   ; else, check if done (entered '.')
+        BEQ     MMDONE
+        MOVEA.L A1,A6       ; new value to write in!
+        BSR     MEM2HEX     ; store input value from A6 in D1
+        MOVE.W  D1,(A0)+    ; put it in address location
+        BRA     MMWORD      ; and loop!
+MMLONG  ADDA.L  #20,A1  ; output will be 19 chars long + null
+        MOVE.B  #0,-(A1)
+        MOVE.B  #'?',-(A1)
+        CLR.L   D1
+        MOVE.L  (A0),D1
+        BSR     HEX2MEM     ; writes memory content to -8(A1)
+        MOVE.B  #$9,-(A1)   ; a tabspace
+        MOVE.L  A0,D1
+        BSR     HEX2MEM     ; memory address to -8(A1)
+        MOVE.B  #'$',-(A1)
+        MOVE.B  #14,D0
+        TRAP    #15         ; print
+        MOVE.B  #2,D0
+        TRAP    #15         ; read new value, if any
+        CMPI.B  #0,(A1)
+        BNE     MMLNEXT     ; skip memory address?
+        ADDA.L  #4,A0       ; if yes, increment A0
+        BRA     MMLONG      ; ...and loop
+MMLNEXT CMPI.B  #'.',(A1)   ; else, check if done (entered '.')
+        BEQ     MMDONE
+        MOVEA.L A1,A6       ; new value to write in!
+        BSR     MEM2HEX     ; store input value from A6 in D1
+        MOVE.L  D1,(A0)+    ; put it in address location
+        BRA     MMLONG      ; and loop!
+MMINV   BSR     INVALID
+MMDONE  MOVEM.L (A7)+,D0-D1/A0-A1
         RTS
 
 * BF -- fills block of memory with word pattern
@@ -283,11 +377,13 @@ BFDONE  MOVEM.L (A7)+,D0-D3/D7/A1-A3
 GO      MOVEM.L D0-D7/A0-A7,-(A7)   ; don't allow the program to change registers
         MOVE.B  (A6)+,D1    ; '$'
         CMPI.B  #$24,D1 ; is it '$'?
-        BNE     INVALID ; wrong command usage
+        BNE     GOINV   ; wrong command usage
         BSR     MEM2HEX ; D1 has address in hex
         MOVEA.L D1,A0   ;store in A0
         JSR     (A0)    ; execute the program
-        MOVEM.L (A7)+,D0-D7/A0-A7
+        BRA     GODONE
+GOINV   BSR     INVALID
+GODONE  MOVEM.L (A7)+,D0-D7/A0-A7
         RTS
         
 * DF -- displays formatted registers
@@ -518,6 +614,8 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
+
+
 
 
 
