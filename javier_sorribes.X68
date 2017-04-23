@@ -18,6 +18,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
             DC.B    '2MM',$20
             DC.B    '2BF',$20
+            DC.B    '4BMOV',$20
             DC.B    '2GO',$20
             DC.B    '2DF',0
             DC.B    '4EXIT',0
@@ -28,6 +29,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    SORTW
             DC.W    MM
             DC.W    BF
+            DC.W    BMOV
             DC.W    GO
             DC.W    DF
             DC.W    EXIT
@@ -53,6 +55,10 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',0
 HELP_MSG2
             ** Add all others as I go
+            DC.B    'BMOV: Duplicate a block of memory at another address',$A,$D
+            DC.B    'Must provide two addresses (inclusive, exclusive) for first block',$A,$D
+            DC.B    'Only one address (inclusive start) for second block',$A,$D
+            DC.B    'BMOV <address1.1> <address1.2> <address2>',$A,$A,$D
             DC.B    'GO: Execute Another Program',$A,$D
             DC.B    'GO <address1>',$A,$A,$D
             DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
@@ -373,6 +379,37 @@ BFINV   BSR     INVALID
 BFDONE  MOVEM.L (A7)+,D0-D3/D7/A1-A3
         RTS
         
+* BMOV -- copies block of memory somewhere else
+BMOV    MOVEM.L D1/A2-A4,-(A7)
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #$24,D1 ; is it '$'?
+        BNE     BMINV ; wrong command usage
+        BSR     MEM2HEX ; D1 has 1st address in hex
+        MOVEA.L D1,A2   ;store in A2
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #$20,D1 ; is it ' '?
+        BNE     BMINV
+        MOVE.B  (A6)+,D1    ; second '$'
+        CMPI.B  #$24,D1
+        BNE     BMINV   
+        BSR     MEM2HEX ; D1 has 2nd address in hex
+        MOVE.L  D1,A3   ; store in A3
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #$20,D1 ; is it ' '?
+        BNE     BMINV
+        MOVE.B  (A6)+,D1    ; third '$'
+        CMPI.B  #$24,D1
+        BNE     BMINV   
+        BSR     MEM2HEX ; D1 has 3rd address in hex
+        MOVE.L  D1,A4       ; store in A4
+BMLOOP  CMPA.L  A2,A3
+        BLE     BMDONE  ; done when A2 reaches A3
+        MOVE.B  (A2)+,(A4)+ ; copy
+        BRA     BMLOOP
+BMINV   BSR     INVALID
+BMDONE  MOVEM.L (A7)+,D1/A2-A4
+        RTS
+        
 * GO -- executes another program
 GO      MOVEM.L D0-D7/A0-A7,-(A7)   ; don't allow the program to change registers
         MOVE.B  (A6)+,D1    ; '$'
@@ -614,6 +651,7 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
+
 
 
 
