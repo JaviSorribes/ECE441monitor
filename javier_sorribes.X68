@@ -19,6 +19,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '2MM',$20
             DC.B    '2BF',$20
             DC.B    '4BMOV',$20
+            DC.B    '4BTST',$20
             DC.B    '2GO',$20
             DC.B    '2DF',0
             DC.B    '4EXIT',0
@@ -30,6 +31,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MM
             DC.W    BF
             DC.W    BMOV
+            DC.W    BTST
             DC.W    GO
             DC.W    DF
             DC.W    EXIT
@@ -55,10 +57,12 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',0
 HELP_MSG2
             ** Add all others as I go
-            DC.B    'BMOV: Duplicate a block of memory at another address',$A,$D
+            DC.B    'BMOV: Duplicate A Memory Block At Another Address',$A,$D
             DC.B    'Must provide two addresses (inclusive, exclusive) for first block',$A,$D
             DC.B    'Only one address (inclusive start) for second block',$A,$D
             DC.B    'BMOV <address1.1> <address1.2> <address2>',$A,$A,$D
+            DC.B    'BTST: Test Memory Block',$A,$D
+            DC.B    'BTST <address1> <address2>',$A,$A,$D
             DC.B    'GO: Execute Another Program',$A,$D
             DC.B    'GO <address1>',$A,$A,$D
             DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
@@ -410,6 +414,72 @@ BMINV   BSR     INVALID
 BMDONE  MOVEM.L (A7)+,D1/A2-A4
         RTS
         
+* BTST -- tests each bit (by setting and unsetting all) in a block of memory
+BTERROR DC.B    'MEMORY ERROR FOUND AT LOCATION $00000000'
+BTLOC   DC.B    $A,$D ; this and BTREAD point after for HEX2MEM to work
+        DC.B    'Value expected: '
+BTEXP   DC.B    '00',$A,$D
+        DC.B    'Value read: 00'
+BTREAD  DC.B    0
+BTST    MOVEM.L D0-D1/A1-A3,-(A7)
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #$24,D1 ; is it '$'?
+        BNE     BTINV ; wrong command usage
+        BSR     MEM2HEX ; D1 has 1st address in hex
+        MOVEA.L D1,A2   ; store in A2
+        MOVEA.L A2,A1   ; store copy for BTLOOP2
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #$20,D1 ; is it ' '?
+        BNE     BTINV
+        MOVE.B  (A6)+,D1    ; second '$'
+        CMPI.B  #$24,D1
+        BNE     BTINV   
+        BSR     MEM2HEX ; D1 has 2nd address in hex
+        MOVE.L  D1,A3   ; store in A3
+        CLR.L   D1  ; needed to only look at bytes
+BTLOOP1 CMPA.L  A2,A3   ; this loop tries bit pattern 1010
+        BLE     BTPRELOOP2
+        MOVE.B  #$AA,(A2)   ; write
+        MOVE.B  (A2)+,D1    ; read
+        CMPI.B  #$AA,D1     ; check correct
+        BEQ     BTLOOP1     ; move to next byte
+        LEA     BTREAD,A1   ; if here, there is a problem in memory!
+        BSR     HEX2MEM_NOZ ; load everything to memory, to be able to print error
+        LEA     BTEXP,A1
+        MOVE.B  #'A',(A1)+
+        MOVE.B  #'A',(A1)
+        LEA     BTLOC,A1
+        SUBA.L  #1,A2
+        MOVE.L  A2,D1
+        BSR     HEX2MEM
+        LEA     BTERROR,A1
+        MOVE.B  #13,D0
+        TRAP    #15     ; print the error message
+        BRA     BTDONE  ; stop execution
+BTPRELOOP2  MOVEA.L A1,A2   ; copy was stored a while back to be able to start over
+BTLOOP2 CMPA.L  A2,A3   ; this loop tries bit pattern 0101. Works the same as BTLOOP1
+        BLE     BTDONE
+        MOVE.B  #$55,(A2)   ; write
+        MOVE.B  (A2)+,D1    ; read
+        CMPI.B  #$55,D1     ; check correct
+        BEQ     BTLOOP2     ; move to next byte
+        LEA     BTREAD,A1   ; error in memory, act like before
+        BSR     HEX2MEM_NOZ
+        LEA     BTEXP,A1
+        MOVE.B  #'5',(A1)+
+        MOVE.B  #'5',(A1)
+        LEA     BTLOC,A1
+        SUBA.L  #1,A2
+        MOVE.L  A2,D1
+        BSR     HEX2MEM
+        LEA     BTERROR,A1
+        MOVE.B  #13,D0
+        TRAP    #15
+        BRA     BTDONE
+BTINV   BSR     INVALID
+BTDONE  MOVEM.L (A7)+,D0-D1/A1-A3
+        RTS
+        
 * GO -- executes another program
 GO      MOVEM.L D0-D7/A0-A7,-(A7)   ; don't allow the program to change registers
         MOVE.B  (A6)+,D1    ; '$'
@@ -651,21 +721,7 @@ INTERR  MOVE.B  #13,D0
 
 END
     END     START        ; last line of source
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    
 
 
 *~Font name~Courier New~
