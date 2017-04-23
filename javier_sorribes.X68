@@ -17,6 +17,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '4MDSP',$20  ; number specifies length of word 
             DC.B    '5SORTW',$20    ; used for SEARCH (not input)
             DC.B    '2MM',$20
+            DC.B    '2MS',$20
             DC.B    '2BF',$20
             DC.B    '4BMOV',$20
             DC.B    '4BTST',$20
@@ -29,6 +30,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    MDSP
             DC.W    SORTW
             DC.W    MM
+            DC.W    MS
             DC.W    BF
             DC.W    BMOV
             DC.W    BTST
@@ -50,6 +52,9 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'W: Displays one word',$A,$D
             DC.B    'L: Displays one long word',$A,$D
             DC.B    'MM <address>[ size]',$A,$A,$D
+            DC.B    'MS: Set Memory To Given ASCII Or Hex',$A,$D
+            DC.B    'Default: ASCII. Prepend $ for hex (byte, word or long)',$A,$D
+            DC.B    'MS <address1> [$]<string|hex> eg: MS $4000 Hello!',$A,$A,$D
             DC.B    'BF: Fills Block Of Memory With Word Pattern',$A,$D
             DC.B    'Both addresses must be even',$A,$D
             DC.B    'Default pattern: 0000',$A,$D
@@ -343,6 +348,45 @@ MMLNEXT CMPI.B  #'.',(A1)   ; else, check if done (entered '.')
         BRA     MMLONG      ; and loop!
 MMINV   BSR     INVALID
 MMDONE  MOVEM.L (A7)+,D0-D1/A0-A1
+        RTS
+        
+* MS -- store ascii (including null terminator) or hex in memory
+MS      MOVEM.L D1/A1,-(A7)
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #$24,D1     ; is it '$'?
+        BNE     MSINV    ; wrong command usage
+        BSR     MEM2HEX     ; D1 has 1st address in hex
+        MOVEA.L D1,A1       ; store in A1
+        MOVE.B  (A6)+,D1
+        CMPI.B  #$20,D1     ; is it ' '?
+        BNE     MSINV   ; wrong command usage
+        MOVE.B  (A6)+,D1
+        CMPI.B  #$24,D1     ; '$'?
+        BEQ     MSHEX
+        SUBA.L  #1,A6   ; have to put A6 back at start of ascii
+MSASCII MOVE.B  (A6),(A1)+  ; put that char in (A1) and increment A1
+        CMPI.B  #0,(A6)+    ; check if end and increment A6 to match A1
+        BEQ     MSDONE  ; end of string
+        BRA     MSASCII ; repeat
+MSHEX   BSR     MEM2HEX ; hex number stored in D1
+        CMPI.L  #$FF,D1 ; see size of number
+        BLE     MSBYTE
+        CMPI.L  #$FFFF,D1
+        BLE     MSWORD
+MSLONG  ADDA.L  #4,A1   ; move A1 to end of long word
+        MOVE.B  D1,-(A1)    ; have to copy 4 bytes
+        ROR.L   #8,D1       ; first one was copied, so look at next byte
+        MOVE.B  D1,-(A1)    ; copy second byte
+        ROR.L   #8,D1
+        SUBA.L  #2,A1   ; done to counteract the next action
+MSWORD  ADDA.L  #2,A1   ; move A1 to end of word
+        MOVE.B  D1,-(A1)    ; will copy 2 bytes
+        ROR.L   #8,D1   ; look at second one
+        SUBA.L  #1,A1   ; to counteract the fact that MSBYTE doesn't predecrement
+MSBYTE  MOVE.B  D1,(A1) ; copy one byte
+        BRA     MSDONE
+MSINV   BSR     INVALID
+MSDONE  MOVEM.L (A7)+,D1/A1
         RTS
 
 * BF -- fills block of memory with word pattern
@@ -722,6 +766,7 @@ INTERR  MOVE.B  #13,D0
 END
     END     START        ; last line of source
     
+
 
 
 *~Font name~Courier New~
