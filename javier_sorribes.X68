@@ -25,6 +25,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '2GO',$20
             DC.B    '2DF',0
             DC.B    '4EXIT',0
+            DC.B    '6BPRINT',$20
             DC.B    '4CONV',$20
             
 COM_ADDR    DC.W    HELP        ; Command addresses table
@@ -39,6 +40,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    GO
             DC.W    DF
             DC.W    EXIT
+            DC.W    BPRINT
             DC.W    CONV
             
 HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
@@ -74,6 +76,10 @@ HELP_MSG2   DC.B    'BMOV: Duplicate A Memory Block At Another Address',$A,$D
             DC.B    'GO <address1>',$A,$A,$D
             DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
             DC.B    'EXIT: Exit The Monitor Program eg: EXIT<CR>',$A,$A,$D
+            DC.B    'The two extra commands:',$A,$A,$D
+            DC.B    'BPRINT: Print Block Of Memory',$A,$D
+            DC.B    'Default end: wherever a null char is found',$A,$D
+            DC.B    'BPRINT <address1>[ <address2>]',$A,$A,$D
             DC.B    'CONV: Convert Hex to Decimal, Or Vice Versa',$A,$D
             DC.B    'CONV [$]num eg: CONV 16<CR> returns $10',0
             
@@ -527,48 +533,48 @@ BTDONE  MOVEM.L (A7)+,D0-D1/A1-A3
         RTS
         
 * BSCH -- search for string literal in memory block
-BSCHNO  DC.B    'Not found',0
-BSCHYES DC.B    'Found at location: $00000000'
-BSCHYESADDR DC.B 0
+BSNO        DC.B    'Not found',0
+BSYES       DC.B    'Found at location: $00000000'
+BSYESADDR   DC.B 0
 BSCH    MOVEM.L D1/A1,-(A7)
-        LEA     BSCHNO,A1   ; will change if found
+        LEA     BSNO,A1 ; will change if found
         MOVE.B  (A6)+,D1    ; first '$'
         CMPI.B  #'$',D1 ; is it '$'?
-        BNE     BSCHINV ; wrong command usage
+        BNE     BSINV   ; wrong command usage
         BSR     MEM2HEX ; D1 has 1st address in hex
         MOVEA.L D1,A2   ; store in A2
         MOVE.B  (A6)+,D1    ; space in between addresses
         CMPI.B  #' ',D1 ; is it ' '?
-        BNE     BSCHINV
+        BNE     BSINV
         MOVE.B  (A6)+,D1    ; second '$'
         CMPI.B  #'$',D1
-        BNE     BSCHINV   
+        BNE     BSINV   
         BSR     MEM2HEX ; D1 has 2nd address in hex
         MOVE.L  D1,A3   ; store in A3
         MOVE.B  (A6)+,D1    ; a space
         CMPI.B  #' ',D1
-        BNE     BSCHINV
-BSCHLOOP    CMPA.L A2,A3
-        BEQ     BSCHDONE
-        MOVEA.L A6,A4
-        CMP.B   (A2)+,(A4)+
-        BNE     BSCHLOOP
-        MOVE.L  A2,A5
-BSCHMAYB    CMPI.B  #0,(A4)
-        BEQ     BSCHFOUND
-        CMP.B   (A5)+,(A4)+
-        BNE     BSCHLOOP
-        BRA     BSCHMAYB
-BSCHINV BSR     INVALID
-        BRA     BSCHEND
-BSCHFOUND MOVE.L A2,D1
-        SUBQ.L  #1,D1
-        LEA     BSCHYESADDR,A1
-        BSR     HEX2MEM
-        LEA     BSCHYES,A1
-BSCHDONE MOVE.B #13,D0
-        TRAP    #15   
-BSCHEND MOVEM.L (A7)+,D1/A1
+        BNE     BSINV
+BSLOOP  CMPA.L A2,A3
+        BEQ     BSDONE  ; stop if A2 reaches A3 (not found)
+        MOVEA.L A6,A4   ; keep A6 for reference
+        CMP.B   (A2)+,(A4)+ ; compare first char
+        BNE     BSLOOP  ; look at next if different
+        MOVE.L  A2,A5   ; keep A2 for reference
+BSMAYB  CMPI.B  #0,(A4) ; see if we reached end of string
+        BEQ     BSFOUND ; if we did, the whole string matched!
+        CMP.B   (A5)+,(A4)+ ; else, compare next char
+        BNE     BSLOOP  ; if not equal, have to check next possible word start
+        BRA     BSMAYB  ; if equal, keep on looking in this word
+BSINV   BSR     INVALID
+        BRA     BSEND
+BSFOUND MOVE.L  A2,D1   ; to tell where it was found
+        SUBQ.L  #1,D1   ; was off by one
+        LEA     BSYESADDR,A1
+        BSR     HEX2MEM ; write address in the message
+        LEA     BSYES,A1
+BSDONE  MOVE.B  #13,D0
+        TRAP    #15     ; print message: found or not found
+BSEND   MOVEM.L (A7)+,D1/A1
         RTS
         
 * GO -- executes another program
@@ -614,6 +620,43 @@ EXIT    LEA     GOODBYE,A1
         BRA     END     ; exit program
         
 * The 2 extra commands:
+* BPRINT -- print as ascii a memory block
+BPRINT  MOVEM.L D0-D1/A1-A3,-(A7)
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #'$',D1 ; is it '$'?
+        BNE     BPINV ; wrong command usage
+        BSR     MEM2HEX ; D1 has 1st address in hex
+        MOVEA.L D1,A2   ; store in A2
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #0,D1   ; is it null?
+        BEQ     BPNULL  ; read until null character found
+        CMPI.B  #' ',D1 ; is it ' '?
+        BNE     BPINV
+        MOVE.B  (A6)+,D1    ; second '$'
+        CMPI.B  #'$',D1
+        BNE     BPINV   
+        BSR     MEM2HEX ; D1 has 2nd address in hex
+        MOVE.L  D1,A3   ; store in A3
+        MOVEA.L A6,A1   ; print from here
+        MOVE.B  #0,1(A1)    ; make sure
+        MOVE.B  #14,D0  ; for printing trap
+BPBLOCK CMPA.L  A2,A3
+        BLE     BPBDONE ; stop when A2 reaches A3
+        MOVE.B  (A2)+,(A1)  ; put byte in (A1)
+        TRAP    #15 ; print that byte!
+        BRA     BPBLOCK
+BPBDONE MOVE.B  #0,(A1)
+        MOVE.B  #13,D0
+        TRAP    #15     ; print a line feed and carriage return
+        BRA     BPDONE
+BPNULL  MOVEA.L A2,A1   ; no limit given, so print till null char found
+        MOVE.B  #13,D0
+        TRAP    #15     ; print!
+        BRA     BPDONE
+BPINV   BSR     INVALID  
+BPDONE  MOVEM.L (A7)+,D0-D1/A1-A3
+        RTS
+
 * CONV -- takes in hex and returns decimal, or viceversa
 CONV    MOVEM.L D0-D1/A1,-(A7)
         MOVE.B  (A6)+,D1
