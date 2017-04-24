@@ -21,6 +21,7 @@ COM_TABL    DC.B    '4HELP',0   ; Command names table
             DC.B    '2BF',$20
             DC.B    '4BMOV',$20
             DC.B    '4BTST',$20
+            DC.B    '4BSCH',$20
             DC.B    '2GO',$20
             DC.B    '2DF',0
             DC.B    '4EXIT',0
@@ -34,6 +35,7 @@ COM_ADDR    DC.W    HELP        ; Command addresses table
             DC.W    BF
             DC.W    BMOV
             DC.W    BTST
+            DC.W    BSCH
             DC.W    GO
             DC.W    DF
             DC.W    EXIT
@@ -60,14 +62,14 @@ HELP_MSG    DC.B    'HELP: Displays This Message',$A,$A,$D
             DC.B    'Default pattern: 0000',$A,$D
             DC.B    'If less than 4 digits given, right justified and zero padded',$A,$D
             DC.B    'BF <address1> <address2>[ pattern] eg: BF $2000 $2200 4325<CR>',0
-HELP_MSG2
-            ** Add all others as I go
-            DC.B    'BMOV: Duplicate A Memory Block At Another Address',$A,$D
+HELP_MSG2   DC.B    'BMOV: Duplicate A Memory Block At Another Address',$A,$D
             DC.B    'Must provide two addresses (inclusive, exclusive) for first block',$A,$D
             DC.B    'Only one address (inclusive start) for second block',$A,$D
             DC.B    'BMOV <address1.1> <address1.2> <address2>',$A,$A,$D
             DC.B    'BTST: Test Memory Block',$A,$D
             DC.B    'BTST <address1> <address2>',$A,$A,$D
+            DC.B    'BSCH: Search In Memory Block',$A,$D
+            DC.B    'BSCH <address1> <address2> <string>',$A,$A,$D
             DC.B    'GO: Execute Another Program',$A,$D
             DC.B    'GO <address1>',$A,$A,$D
             DC.B    'DF: Displays All Formatted Registers eg: DF<CR>',$A,$A,$D
@@ -524,6 +526,51 @@ BTINV   BSR     INVALID
 BTDONE  MOVEM.L (A7)+,D0-D1/A1-A3
         RTS
         
+* BSCH -- search for string literal in memory block
+BSCHNO  DC.B    'Not found',0
+BSCHYES DC.B    'Found at location: $00000000'
+BSCHYESADDR DC.B 0
+BSCH    MOVEM.L D1/A1,-(A7)
+        LEA     BSCHNO,A1   ; will change if found
+        MOVE.B  (A6)+,D1    ; first '$'
+        CMPI.B  #'$',D1 ; is it '$'?
+        BNE     BSCHINV ; wrong command usage
+        BSR     MEM2HEX ; D1 has 1st address in hex
+        MOVEA.L D1,A2   ; store in A2
+        MOVE.B  (A6)+,D1    ; space in between addresses
+        CMPI.B  #' ',D1 ; is it ' '?
+        BNE     BSCHINV
+        MOVE.B  (A6)+,D1    ; second '$'
+        CMPI.B  #'$',D1
+        BNE     BSCHINV   
+        BSR     MEM2HEX ; D1 has 2nd address in hex
+        MOVE.L  D1,A3   ; store in A3
+        MOVE.B  (A6)+,D1    ; a space
+        CMPI.B  #' ',D1
+        BNE     BSCHINV
+BSCHLOOP    CMPA.L A2,A3
+        BEQ     BSCHDONE
+        MOVEA.L A6,A4
+        CMP.B   (A2)+,(A4)+
+        BNE     BSCHLOOP
+        MOVE.L  A2,A5
+BSCHMAYB    CMPI.B  #0,(A4)
+        BEQ     BSCHFOUND
+        CMP.B   (A5)+,(A4)+
+        BNE     BSCHLOOP
+        BRA     BSCHMAYB
+BSCHINV BSR     INVALID
+        BRA     BSCHEND
+BSCHFOUND MOVE.L A2,D1
+        SUBQ.L  #1,D1
+        LEA     BSCHYESADDR,A1
+        BSR     HEX2MEM
+        LEA     BSCHYES,A1
+BSCHDONE MOVE.B #13,D0
+        TRAP    #15   
+BSCHEND MOVEM.L (A7)+,D1/A1
+        RTS
+        
 * GO -- executes another program
 GO      MOVEM.L D0-D7/A0-A7,-(A7)   ; don't allow the program to change registers
         MOVE.B  (A6)+,D1    ; '$'
@@ -766,6 +813,7 @@ INTERR  MOVE.B  #13,D0
 END
     END     START        ; last line of source
     
+
 
 
 
