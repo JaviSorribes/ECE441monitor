@@ -123,6 +123,7 @@ STACK       EQU $2FFC   ; $3000 minus a long word because A7 will be stored firs
         MOVE.B  #13,D0
         TRAP    #15     ; display welcome message
         SUBA.L  #MAX_IN_LEN,A7  ; open space in stack for input (do only once)
+*** COMMAND INTERPRETER ***
 PROMPT  LEA     PROMPT_STR,A1  
         MOVE.B  #14,D0
         TRAP    #15     ; print out prompt
