@@ -1,6 +1,6 @@
 00001876 Starting Address
 Assembler used: EASy68K Editor/Assembler v5.15.04
-Created On: 4/24/2017 01:22:02
+Created On: 4/26/2017 15:22:54
 
 00000000                             1  *-----------------------------------------------------------
 00000000                             2  * Title      : Monitor Design Project
@@ -621,7 +621,7 @@ Created On: 4/24/2017 01:22:02
 00001ED8  DFFC 00000050            617          ADDA.L  #MAX_IN_LEN,A7  ; move stack back to position prior to reading input
 00001EDE  4CDF 7FFF                618          MOVEM.L (A7)+,D0-D7/A0-A6   ; restore all registers in stack
 00001EE2  2E78 2FFC                619          MOVEA.L STACK,A7
-00001EE6  6000 212C                620          BRA     END     ; exit program
+00001EE6  6000 132C                620          BRA     END     ; exit program
 00001EEA                           621          
 00001EEA                           622  * The 2 extra commands:
 00001EEA                           623  * BPRINT -- print as ascii a memory block
@@ -850,15 +850,15 @@ Created On: 4/24/2017 01:22:02
 00002170  6000 F760                846          BRA     PROMPT
 00002174                           847          
 00002174                           848  *** PROGRAM FOR TESTING GO ***    
-00004000                           849      ORG $4000
-00004000  227C 00004020            850          MOVEA.L #$4020,A1
-00004006  22BC 48492100            851          MOVE.L  #$48492100,(A1)
-0000400C  103C 000D                852          MOVE.B  #13,D0
-00004010  4E4F                     853          TRAP    #15     ; print secret message
-00004012  4E75                     854          RTS
-00004014                           855  
-00004014                           856  END
-00004014                           857      END     START        ; last line of source
+00003200                           849      ORG $3200
+00003200  227C 00004020            850          MOVEA.L #$4020,A1
+00003206  22BC 48492100            851          MOVE.L  #$48492100,(A1)
+0000320C  103C 000D                852          MOVE.B  #13,D0
+00003210  4E4F                     853          TRAP    #15     ; print secret message
+00003212  4E75                     854          RTS
+00003214                           855  
+00003214                           856  END
+00003214                           857      END     START        ; last line of source
 
 No errors detected
 No warnings generated
@@ -927,7 +927,7 @@ DF_MSG              16FB
 DF_MSG_END          17BE
 DIV0                20E4
 DIV0_MSG            1825
-END                 4014
+END                 3214
 EXEC                1912
 EXIT                1ECC
 GO                  1E74

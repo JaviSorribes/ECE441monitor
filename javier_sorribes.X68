@@ -846,7 +846,7 @@ INTERR  MOVE.B  #13,D0
         BRA     PROMPT
         
 *** PROGRAM FOR TESTING GO ***    
-    ORG $4000
+    ORG $3200
         MOVEA.L #$4020,A1
         MOVE.L  #$48492100,(A1)
         MOVE.B  #13,D0
@@ -856,7 +856,6 @@ INTERR  MOVE.B  #13,D0
 END
     END     START        ; last line of source
     
-
 
 
 
