@@ -2,7 +2,8 @@
 * Title      : Monitor Design Project
 * Written by : Javier Sorribes
 * Date       : 4/2/17
-* Description: Some crazy, crazy stuff
+* Description: Allows user to repeteadly run debugging commands.
+*              Provides asynchronous exception handling routines.
 *-----------------------------------------------------------
 *** MEMORY INITIALIZATION ***
     ORG     $1000       ; stack and other memory
