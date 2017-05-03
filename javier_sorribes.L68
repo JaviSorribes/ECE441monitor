@@ -1,6 +1,6 @@
 00001876 Starting Address
 Assembler used: EASy68K Editor/Assembler v5.15.04
-Created On: 4/26/2017 16:30:21
+Created On: 4/26/2017 21:33:19
 
 00000000                             1  *-----------------------------------------------------------
 00000000                             2  * Title      : Monitor Design Project
@@ -857,7 +857,7 @@ Created On: 4/26/2017 16:30:21
 00003206  22BC 48492100            853          MOVE.L  #$48492100,(A1)
 0000320C  103C 000D                854          MOVE.B  #13,D0
 00003210  4E4F                     855          TRAP    #15     ; print secret message
-00003212  4E75                     856          RTS
+00003212  4E75                     856          RTS        
 00003214                           857  
 00003214                           858  END
 00003214                           859      END     START        ; last line of source

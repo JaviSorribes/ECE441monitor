@@ -853,11 +853,12 @@ INTERR  MOVE.B  #13,D0
         MOVE.L  #$48492100,(A1)
         MOVE.B  #13,D0
         TRAP    #15     ; print secret message
-        RTS
+        RTS        
 
 END
     END     START        ; last line of source
     
+
 
 
 
